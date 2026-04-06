@@ -1,50 +1,121 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# SpectraViewer Constitution
+
+**项目定位**: 光子器件测试数据处理程序，用于读取测试数据进行绘图和简要分析
+
+---
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. 数据完整性优先
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+- **原则**: 原始数据不可修改，所有处理均为只读操作
+- **实施**:
+  - CSV 读取后保留原始波长和功率数据
+  - 插值、减法等操作生成新数组，不覆盖原数据
+  - SpectraManager 中 data 字典存储原始数据，get_xy() 返回副本
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. 模块化分层
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+- **原则**: 数据处理与 GUI 严格分离
+- **分层结构**:
+  ```
+  spectra_lib.py   → 纯数据处理层 (无 GUI 依赖)
+  Ring_analyse.py  → 光子学分析层 (仅依赖 numpy/scipy)
+  app.py           → GUI 交互层 (PyQt5 + matplotlib)
+  main.py          → 入口配置
+  ```
+- **边界规则**:
+  - `spectra_lib.py` 禁止导入 PyQt5
+  - `Ring_analyse.py` 禁止导入 PyQt5
+  - 分析逻辑与绘图逻辑分离
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. 科学计算可复现
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- **原则**: 任何分析结果必须可复现
+- **要求**:
+  - 关键参数使用默认值，但允许用户覆盖
+  - 分析函数返回完整结果对象，不仅是图像
+  - 随机种子固定 (如需随机算法)
+  - 拟合参数、阈值等记录在结果中
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. 中文用户界面
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- **原则**: 界面语言为简体中文
+- **范围**:
+  - GUI 标签、按钮、提示
+  - 日志输出
+  - 错误消息
+  - 图像标题和标签 (可切换英文用于出版)
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. 增量功能开发
+
+- **原则**: 新功能以插件形式添加，不破坏现有功能
+- **扩展点**:
+  - 新分析类型 → 添加新面板/模块
+  - 新文件格式 → 扩展 read_* 函数
+  - 新绘图样式 → 扩展 plot_publication 参数
+
+---
+
+## 技术约束
+
+### 依赖管理
+
+- **核心依赖**: numpy, scipy, pandas, matplotlib, PyQt5
+- **版本策略**: 兼容主流版本，不锁定具体版本号
+- **新增依赖**: 仅在必要时添加，需说明用途
+
+### 文件格式
+
+- **输入**: SANTEC CSV (14行头 + 数据列)
+- **输出**:
+  - 图像: PNG/PDF (matplotlib 保存)
+  - 数据: 暂无导出功能 (未来可添加)
+
+### 性能考虑
+
+- **数据量**: 典型单文件 < 100,000 点
+- **批量加载**: 支持文件夹内 10-100 个文件
+- **响应要求**: 绘图 < 1 秒，分析 < 5 秒
+
+---
+
+## 开发规范
+
+### 代码风格
+
+- 函数文档使用中文或中英双语
+- 变量名使用英文，遵循 snake_case
+- 常量使用大写 SNAKE_CASE
+
+### 错误处理
+
+- 文件读取失败 → 打印错误，跳过该文件，继续处理其他文件
+- 参数无效 → 打印提示，不执行操作
+- 分析失败 → 打印详细错误信息，不崩溃
+
+### 测试策略
+
+- 当前阶段: 无正式测试框架
+- 验证方式: 使用实际数据手动验证
+- 未来: 可添加 pytest 单元测试
+
+---
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### 优先级
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+1. 数据准确性 > 性能 > 界面美观
+2. 用户需求 > 代码整洁度
+3. 功能完整 > 过度工程
+
+### 变更审批
+
+- 新功能: 需明确需求和预期行为
+- API 变更: 需说明向后兼容性
+- 架构变更: 需讨论并记录决策
+
+---
+
+**Version**: 1.0 | **Ratified**: 2026-04-06 | **Last Amended**: 2026-04-06
