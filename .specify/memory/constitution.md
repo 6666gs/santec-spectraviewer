@@ -1,3 +1,17 @@
+<!--
+Sync Impact Report:
+- Version change: 1.0 → 1.1.0
+- Modified principles:
+  - II. 模块化分层 (更新目录结构反映重构)
+- Added sections: 无
+- Removed sections: 无
+- Templates status:
+  - .specify/templates/plan-template.md: ✅ 无需更新
+  - .specify/templates/spec-template.md: ✅ 无需更新
+  - .specify/templates/tasks-template.md: ✅ 无需更新
+- Follow-up TODOs: 无
+-->
+
 # SpectraViewer Constitution
 
 **项目定位**: 光子器件测试数据处理程序，用于读取测试数据进行绘图和简要分析
@@ -19,14 +33,30 @@
 - **原则**: 数据处理与 GUI 严格分离
 - **分层结构**:
   ```
-  spectra_lib.py   → 纯数据处理层 (无 GUI 依赖)
-  Ring_analyse.py  → 光子学分析层 (仅依赖 numpy/scipy)
-  app.py           → GUI 交互层 (PyQt5 + matplotlib)
-  main.py          → 入口配置
+  core/              → 纯数据处理层 (无 GUI 依赖)
+    ├── io.py        → CSV 读取
+    ├── manager.py   → SpectraManager
+    ├── grid.py      → 网格/插值工具
+    └── utils.py     → 通用工具
+
+  analysis/          → 光子学分析层 (无 GUI 依赖)
+    ├── ring.py      → 微环谐振器分析
+    ├── peak.py      → 峰值/谷值检测
+    └── fitting.py   → 洛伦兹拟合
+
+  visualization/     → 可视化层 (仅 matplotlib)
+    └── plotter.py   → 出版质量绑图
+
+  gui/               → GUI 交互层 (PyQt5)
+    ├── main_window.py → 主窗口
+    └── widgets.py     → 通用组件
+
+  main.py            → 入口配置
   ```
 - **边界规则**:
-  - `spectra_lib.py` 禁止导入 PyQt5
-  - `Ring_analyse.py` 禁止导入 PyQt5
+  - `core/` 禁止导入 PyQt5
+  - `analysis/` 禁止导入 PyQt5
+  - `visualization/` 禁止导入 PyQt5
   - 分析逻辑与绘图逻辑分离
 
 ### III. 科学计算可复现
@@ -51,9 +81,10 @@
 
 - **原则**: 新功能以插件形式添加，不破坏现有功能
 - **扩展点**:
-  - 新分析类型 → 添加新面板/模块
-  - 新文件格式 → 扩展 read_* 函数
-  - 新绘图样式 → 扩展 plot_publication 参数
+  - 新分析类型 → 在 `analysis/` 添加新模块
+  - 新文件格式 → 扩展 `core/io.py`
+  - 新绘图样式 → 扩展 `visualization/plotter.py`
+  - 新 GUI 面板 → 在 `gui/` 添加新模块
 
 ---
 
@@ -118,4 +149,4 @@
 
 ---
 
-**Version**: 1.0 | **Ratified**: 2026-04-06 | **Last Amended**: 2026-04-06
+**Version**: 1.1.0 | **Ratified**: 2026-04-06 | **Last Amended**: 2026-04-06

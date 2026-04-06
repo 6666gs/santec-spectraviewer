@@ -1,8 +1,9 @@
+# gui/main_window.py — 主窗口
+"""SpectraViewer 主窗口 GUI。"""
+
 import re
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import find_peaks
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
@@ -14,44 +15,32 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
-from spectra_lib import SpectraManager, interp_on_grid, plot_publication
-from Ring_analyse import Ring
-
-# ──────────────────────────────────────────────────────────────────────────────
-# stdout 重定向到 QTextEdit
-# ──────────────────────────────────────────────────────────────────────────────
-class _Stream:
-    def __init__(self, text_edit):
-        self._te = text_edit
-    def write(self, msg):
-        self._te.moveCursor(self._te.textCursor().End)
-        self._te.insertPlainText(msg)
-        self._te.ensureCursorVisible()
-    def flush(self):
-        pass
+from core.manager import SpectraManager
+from core.grid import interp_on_grid
+from visualization.plotter import plot_publication
+from analysis.ring import Ring
+from analysis.peak import analyze_peaks, calc_3db_bandwidth, format_peak_results
+from .widgets import redirect_stdout_to
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 主窗口
-# ──────────────────────────────────────────────────────────────────────────────
 class MainWindow(QWidget):
+    """SpectraViewer 主窗口。"""
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle('光谱数据可视化工具')
-        self.mgr = None          # SpectraManager 实例
-        self.ref_path = None     # raw 模式下的 reference 文件路径
+        self.mgr = None
+        self.ref_path = None
         self._build_ui()
         self._redirect_stdout()
 
-    # ── 构建 UI ──────────────────────────────────────────────────────────────
+    # ── UI 构建 ──────────────────────────────────────────────────────────────
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setSpacing(6)
 
-        # ── 顶部工具栏 ──
         root.addLayout(self._build_topbar())
 
-        # ── 主体：左侧表格 + 右侧控制面板 ──
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self._build_table())
         splitter.addWidget(self._build_right_panel())
@@ -59,7 +48,6 @@ class MainWindow(QWidget):
         splitter.setStretchFactor(1, 2)
         root.addWidget(splitter, stretch=1)
 
-        # ── 日志 ──
         self.log = QTextEdit()
         self.log.setReadOnly(True)
         self.log.setFixedHeight(90)
@@ -111,7 +99,7 @@ class MainWindow(QWidget):
         vbox = QVBoxLayout(panel)
         vbox.setSpacing(8)
 
-        # ── 公式计算 ──
+        # 公式计算
         grp_formula = QGroupBox('公式计算（A0, A1... 对应列表序号）')
         fl = QVBoxLayout(grp_formula)
         self.formula_edit = QLineEdit()
@@ -125,12 +113,12 @@ class MainWindow(QWidget):
         fl.addWidget(btn_formula_plot)
         vbox.addWidget(grp_formula)
 
-        # ── 多选绘图 ──
+        # 多选绘图
         btn_multi_plot = QPushButton('绘制选中行')
         btn_multi_plot.clicked.connect(self._on_multi_plot)
         vbox.addWidget(btn_multi_plot)
 
-        # ── 图像标签设置 ──
+        # 图像标签
         grp_labels = QGroupBox('图像标签')
         form_labels = QFormLayout(grp_labels)
         self.title_edit = QLineEdit()
@@ -141,9 +129,10 @@ class MainWindow(QWidget):
         form_labels.addRow('Y 轴:', self.ylabel_edit)
         vbox.addWidget(grp_labels)
 
-        # ── 坐标轴范围 ──
+        # 坐标轴范围
         grp_range = QGroupBox('坐标轴范围（空=自动）')
         form_range = QFormLayout(grp_range)
+
         xrange_w = QWidget()
         xrange_h = QHBoxLayout(xrange_w)
         xrange_h.setContentsMargins(0, 0, 0, 0)
@@ -169,10 +158,10 @@ class MainWindow(QWidget):
         form_range.addRow('Y 范围:', yrange_w)
         vbox.addWidget(grp_range)
 
-        # ── 峰值/谷值分析 ──
+        # 峰值/谷值分析
         vbox.addWidget(self._build_peak_panel())
 
-        # ── 微环谐振器分析 ──
+        # 微环分析
         vbox.addWidget(self._build_ring_panel())
 
         vbox.addStretch()
@@ -182,7 +171,6 @@ class MainWindow(QWidget):
         grp = QGroupBox('峰值 / 谷值分析')
         vbox = QVBoxLayout(grp)
 
-        # 峰/谷 选择
         mode_w = QWidget()
         mode_h = QHBoxLayout(mode_w)
         mode_h.setContentsMargins(0, 0, 0, 0)
@@ -197,7 +185,6 @@ class MainWindow(QWidget):
         vbox.addWidget(mode_w)
 
         form = QFormLayout()
-        # 搜索 X 范围
         xsearch_w = QWidget()
         xsearch_h = QHBoxLayout(xsearch_w)
         xsearch_h.setContentsMargins(0, 0, 0, 0)
@@ -230,7 +217,6 @@ class MainWindow(QWidget):
         vbox = QVBoxLayout(grp)
 
         form = QFormLayout()
-        # 独立波长范围输入
         xrange_w = QWidget()
         xrange_h = QHBoxLayout(xrange_w)
         xrange_h.setContentsMargins(0, 0, 0, 0)
@@ -253,15 +239,12 @@ class MainWindow(QWidget):
 
         return grp
 
-    # ── stdout 重定向 ─────────────────────────────────────────────────────────
     def _redirect_stdout(self):
-        stream = _Stream(self.log)
-        sys.stdout = stream
-        sys.stderr = stream
+        redirect_stdout_to(self.log)
 
     # ── 事件处理 ──────────────────────────────────────────────────────────────
     def _on_type_changed(self, text):
-        pass  # reference button always enabled
+        pass
 
     def _on_select_ref(self):
         path, _ = QFileDialog.getOpenFileName(self, '选择 Reference 文件', '', 'CSV 文件 (*.csv)')
@@ -271,7 +254,6 @@ class MainWindow(QWidget):
             self.lbl_ref.setText(short)
             self.lbl_ref.setStyleSheet('color: green; font-size: 10px;')
             print(f'Reference 文件: {path}')
-            # 若已加载数据，则重新加载以应用 reference 减法
             if self.mgr is not None:
                 folder = self.lbl_path.text()
                 if folder and folder != '未选择文件夹':
@@ -291,7 +273,7 @@ class MainWindow(QWidget):
             return
         self.lbl_path.setText(folder)
         dtype = self.combo_type.currentText()
-        ref = self.ref_path  # always pass reference if set
+        ref = self.ref_path
         try:
             self.mgr = SpectraManager.from_folder(
                 folder, data_type=dtype, reference_path=ref
@@ -332,22 +314,21 @@ class MainWindow(QWidget):
 
     # ── 绘图核心 ──────────────────────────────────────────────────────────────
     def _get_plot_params(self):
-        """读取图像标签和坐标轴范围设置"""
         title = self.title_edit.text().strip() or None
         xlabel = self.xlabel_edit.text().strip() or 'Wavelength (nm)'
         ylabel = self.ylabel_edit.text().strip() or 'Insertion Loss (dB)'
 
-        def _parse_float(edit):
+        def _pf(edit):
             t = edit.text().strip()
             try:
                 return float(t) if t else None
             except ValueError:
                 return None
 
-        xmin = _parse_float(self.xmin_edit)
-        xmax = _parse_float(self.xmax_edit)
-        ymin = _parse_float(self.ymin_edit)
-        ymax = _parse_float(self.ymax_edit)
+        xmin = _pf(self.xmin_edit)
+        xmax = _pf(self.xmax_edit)
+        ymin = _pf(self.ymin_edit)
+        ymax = _pf(self.ymax_edit)
         xlim = (xmin, xmax) if (xmin is not None and xmax is not None) else None
         ylim = (ymin, ymax) if (ymin is not None and ymax is not None) else None
         return title, xlabel, ylabel, xlim, ylim
@@ -374,7 +355,7 @@ class MainWindow(QWidget):
         fig, ax = plot_publication(data_list, xlabel=xlabel, ylabel=ylabel,
                                    title=title, xlim=xlim, ylim=ylim)
         plt.show(block=False)
-        return fig, ax  # type: ignore[return-value]
+        return fig, ax
 
     # ── 公式绘图 ──────────────────────────────────────────────────────────────
     def _on_formula_plot(self):
@@ -402,8 +383,7 @@ class MainWindow(QWidget):
         return fig, ax
 
     def _eval_formula(self, expr):
-        """解析并计算形如 A12 - A1 - (A2 - A1) * 2 的表达式"""
-        # 提取所有 A{n} 索引
+        """解析并计算形如 A12 - A1 - (A2 - A1) * 2 的表达式。"""
         indices = [int(m) for m in re.findall(r'A(\d+)', expr)]
         if not indices:
             raise ValueError('公式中未找到 A{n} 变量（如 A0, A1...）')
@@ -412,18 +392,15 @@ class MainWindow(QWidget):
             if idx < 0 or idx >= n:
                 raise ValueError(f'索引 A{idx} 超出范围（共 {n} 条数据，索引 0~{n-1}）')
 
-        # 加载所有涉及的数据
         xy_map = {}
         for idx in set(indices):
             xy_map[idx] = self.mgr.get_xy(idx)
 
-        # 以各数据 x 范围的交集为公共网格（小范围主导）
         x_min = max(float(xy_map[i][0].min()) for i in xy_map)
         x_max = min(float(xy_map[i][0].max()) for i in xy_map)
         if x_min >= x_max:
             raise ValueError('各数据的 x 范围无交集，无法计算公式')
 
-        # 在交集范围内，以点数最多的数据为基准，截取对应区间
         base_idx = max(xy_map, key=lambda i: len(xy_map[i][0]))
         x_base = xy_map[base_idx][0]
         mask = (x_base >= x_min) & (x_base <= x_max)
@@ -431,7 +408,6 @@ class MainWindow(QWidget):
         if len(x_common) < 2:
             raise ValueError('交集范围内数据点不足')
 
-        # 将所有数据插值到公共网格
         local_vars = {}
         for idx, (x_src, y_src) in xy_map.items():
             if np.array_equal(x_src, x_common):
@@ -440,23 +416,13 @@ class MainWindow(QWidget):
                 y_aligned = interp_on_grid(x_src, y_src, x_common, mode='edge')
             local_vars[f'_v{idx}'] = y_aligned
 
-        # 将 A{n} 替换为 _v{n}
         safe_expr = re.sub(r'A(\d+)', r'_v\1', expr)
-
-        # 安全 eval
-        result = eval(safe_expr, {'__builtins__': {}, 'np': np}, local_vars)  # noqa: S307
+        result = eval(safe_expr, {'__builtins__': {}, 'np': np}, local_vars)
         return x_common, np.asarray(result, dtype=float)
 
     # ── 峰值/谷值分析 ─────────────────────────────────────────────────────────
     def _get_analysis_data(self):
-        """获取当前待分析的 (x, y, label)。
-
-        优先级：
-        1. 若公式输入框不为空且公式合法 → 使用公式计算结果
-        2. 否则 → 使用列表中选中的单行数据
-
-        返回 (x, y, label, source_desc) 或在出错时 print 错误信息并返回 None。
-        """
+        """获取当前待分析的 (x, y, label)。"""
         if self.mgr is None:
             print('请先加载数据')
             return None
@@ -468,7 +434,7 @@ class MainWindow(QWidget):
                 self.lbl_formula_err.setText('')
                 return x, y, expr, f'公式: {expr}'
             except Exception:
-                pass  # 公式不合法，降级到列表选中行
+                pass
 
         rows = {i.row() for i in self.table.selectedItems()}
         if not rows:
@@ -494,7 +460,6 @@ class MainWindow(QWidget):
             return
         x, y, label, source_desc = result
 
-        # 解析搜索范围
         def _pf(edit):
             t = edit.text().strip()
             try:
@@ -510,53 +475,36 @@ class MainWindow(QWidget):
         dist_str = self.peak_distance.text().strip()
         distance = int(dist_str) if dist_str else 50
 
-        # 截取搜索范围
-        mask = np.ones(len(x), dtype=bool)
-        if xmin is not None:
-            mask &= x >= xmin
-        if xmax is not None:
-            mask &= x <= xmax
-        x_s, y_s = x[mask], y[mask]
-        if len(x_s) < 3:
-            print('搜索范围内数据点不足')
-            return
+        x_range = None
+        if xmin is not None or xmax is not None:
+            x_range = (xmin, xmax)
 
         is_peak = self.radio_peak.isChecked()
-        self._run_peak_analysis(x, y, x_s, y_s, label, source_desc, is_peak, threshold, distance)
 
-    def _run_peak_analysis(self, x_full, y_full, x_s, y_s, label, source_desc, is_peak, threshold, distance):
-        title, xlabel, ylabel, xlim, ylim = self._get_plot_params()
+        # 调用分析模块
+        results = analyze_peaks(x, y, is_peak=is_peak, x_range=x_range,
+                                threshold=threshold, distance=distance)
 
-        if is_peak:
-            # 峰值：找极大点
-            kwargs = {'distance': distance}
-            if threshold is not None:
-                kwargs['height'] = threshold
-            peaks_idx, props = find_peaks(y_s, **kwargs)
-        else:
-            # 谷值：对 y 取负后找极大点
-            kwargs = {'distance': distance}
-            if threshold is not None:
-                kwargs['height'] = -threshold  # 谷值阈值取负
-            peaks_idx, props = find_peaks(-y_s, **kwargs)
-
-        if len(peaks_idx) == 0:
+        if len(results['peaks_idx']) == 0:
             print(f'未找到{"峰值" if is_peak else "谷值"}，尝试调整阈值或搜索范围')
             return
 
         # 绘图
+        title, xlabel, ylabel, xlim, ylim = self._get_plot_params()
         fig, ax = plot_publication(
-            [{'x': x_full, 'y': y_full, 'label': label}],
+            [{'x': x, 'y': y, 'label': label}],
             xlabel=xlabel, ylabel=ylabel, title=title, xlim=xlim, ylim=ylim,
         )
 
         print(f'\n{"峰值" if is_peak else "谷值"}分析结果（{source_desc}）:')
-        for pi in peaks_idx:
-            px, py = x_s[pi], y_s[pi]
-            bw = self._calc_3db_bandwidth(x_s, y_s, pi, is_peak)
+        lines = format_peak_results(results, is_peak)
+        for line in lines:
+            print(line)
+
+        # 标注
+        for i, (px, py) in enumerate(zip(results['x_peaks'], results['y_peaks'])):
+            bw = calc_3db_bandwidth(x, y, results['peaks_idx'][i], is_peak)
             bw_str = f'{bw:.4f} nm' if bw is not None else 'N/A'
-            print(f'  {"峰" if is_peak else "谷"} @ {px:.4f} nm, 值={py:.2f} dB, 3dB带宽={bw_str}')
-            # 标注
             ax.axvline(px, color='red', linestyle='--', linewidth=1, alpha=0.7)
             ax.annotate(
                 f'{px:.3f} nm\n{py:.2f} dB\nBW={bw_str}',
@@ -570,41 +518,6 @@ class MainWindow(QWidget):
 
         fig.canvas.draw()
         plt.show(block=False)
-
-    def _calc_3db_bandwidth(self, x, y, peak_idx, is_peak):
-        """计算 3dB 带宽"""
-        if is_peak:
-            # 峰值：从峰顶向下 3dB
-            half = y[peak_idx] - 3.0
-            try:
-                left = np.max(np.where(y[:peak_idx] <= half)[0])
-            except ValueError:
-                left = 0
-            try:
-                right = np.min(np.where(y[peak_idx:] <= half)[0]) + peak_idx
-            except ValueError:
-                right = len(x) - 1
-        else:
-            # 谷值：谷两侧较大值向下 3dB
-            # 谷值旁边的"平坦部分"取谷两侧各自的局部最大值
-            left_seg = y[:peak_idx]
-            right_seg = y[peak_idx:]
-            left_max = np.max(left_seg) if len(left_seg) > 0 else y[peak_idx]
-            right_max = np.max(right_seg) if len(right_seg) > 0 else y[peak_idx]
-            ref_level = (left_max + right_max) / 2.0
-            half = ref_level - 3.0
-            try:
-                left = np.max(np.where(y[:peak_idx] >= half)[0])
-            except ValueError:
-                left = 0
-            try:
-                right = np.min(np.where(y[peak_idx:] >= half)[0]) + peak_idx
-            except ValueError:
-                right = len(x) - 1
-
-        if left >= right:
-            return None
-        return float(x[right] - x[left])
 
     # ── 微环谐振器分析 ────────────────────────────────────────────────────────
     def _on_ring_analyze(self):
@@ -631,7 +544,6 @@ class MainWindow(QWidget):
             print(f'FSR 均值: {ring.fsr_mean:.4f} nm')
             holdon = self.chk_ring_holdon.isChecked()
             fig_q = ring.cal_Q(holdon=holdon, max_holdon=10)
-            # 统一显示所有图窗（Qt 后端下须在主线程调用 show）
             plt.show(block=False)
             if hasattr(ring, 'fit_results') and ring.fit_results:
                 ql_vals = [r['Ql'] for r in ring.fit_results if np.isfinite(r['Ql']) and r['Ql'] > 0]

@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+"""SpectraViewer 入口。"""
+
 import sys
 
 import matplotlib
@@ -7,7 +10,7 @@ plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
 from PyQt5.QtWidgets import QApplication
-from app import MainWindow
+from gui.main_window import MainWindow
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
