@@ -5,9 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 
-plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['text.usetex'] = False
-
 
 def plot_publication(
     data_list,

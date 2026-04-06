@@ -1,5 +1,11 @@
 # gui/main_window.py — 主窗口
-"""SpectraViewer 主窗口 GUI。"""
+"""SpectraViewer 主窗口 GUI。
+
+设计理念: Laboratory Precision
+- 暗色主题，减少视觉疲劳
+- 清晰的功能分区
+- 现代化的卡片式布局
+"""
 
 import re
 import numpy as np
@@ -10,7 +16,7 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QComboBox, QTableWidget,
     QTableWidgetItem, QTextEdit, QFileDialog, QRadioButton,
     QButtonGroup, QAbstractItemView, QSizePolicy, QHeaderView,
-    QSplitter, QCheckBox,
+    QSplitter, QCheckBox, QFrame, QScrollArea,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -21,6 +27,19 @@ from visualization.plotter import plot_publication
 from analysis.ring import Ring
 from analysis.peak import analyze_peaks, calc_3db_bandwidth, format_peak_results
 from .widgets import redirect_stdout_to
+from .styles import apply_styles, set_status_label, COLORS, group_box_style, styled_label_style
+
+# 颜色常量
+C = COLORS
+
+
+def _parse_float_edit(edit):
+    """从 QLineEdit 解析浮点数，空或无效返回 None。"""
+    t = edit.text().strip()
+    try:
+        return float(t) if t else None
+    except ValueError:
+        return None
 
 
 class MainWindow(QWidget):
@@ -28,60 +47,142 @@ class MainWindow(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('光谱数据可视化工具')
+        self.setWindowTitle('SpectraViewer - 光谱数据可视化')
         self.mgr = None
         self.ref_path = None
         self._build_ui()
         self._redirect_stdout()
+        apply_styles(self)
 
     # ── UI 构建 ──────────────────────────────────────────────────────────────
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setSpacing(6)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(12)
 
-        root.addLayout(self._build_topbar())
+        # 顶部工具栏
+        root.addWidget(self._build_toolbar())
 
+        # 主内容区域
         splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(self._build_table())
-        splitter.addWidget(self._build_right_panel())
+        splitter.addWidget(self._build_table_panel())
+        splitter.addWidget(self._build_control_panel())
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
         root.addWidget(splitter, stretch=1)
 
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setFixedHeight(90)
-        self.log.setFont(QFont('Consolas', 9))
-        root.addWidget(self.log)
+        # 底部日志
+        root.addWidget(self._build_log_panel())
 
-    def _build_topbar(self):
-        bar = QHBoxLayout()
+    def _build_toolbar(self):
+        """构建顶部工具栏。"""
+        toolbar = QFrame()
+        toolbar.setObjectName('toolbar')
+        toolbar.setStyleSheet(f"""
+            QFrame#toolbar {{
+                background-color: {C['bg_card']};
+                border: 1px solid {C['border']};
+                border-radius: 8px;
+            }}
+            QFrame#toolbar QLabel {{
+                background: transparent;
+                color: {C['text']};
+            }}
+        """)
 
-        self.btn_folder = QPushButton('选择文件夹')
+        layout = QHBoxLayout(toolbar)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(12)
+
+        # 文件夹选择
+        self.btn_folder = QPushButton('  选择文件夹')
+        self.btn_folder.setToolTip('选择包含光谱数据的文件夹')
         self.btn_folder.clicked.connect(self._on_select_folder)
-        bar.addWidget(self.btn_folder)
+        layout.addWidget(self.btn_folder)
 
-        bar.addWidget(QLabel('数据类型:'))
+        # 分隔符
+        sep1 = QFrame()
+        sep1.setFrameShape(QFrame.VLine)
+        sep1.setStyleSheet(f'background-color: {C["border"]}; border: none;')
+        sep1.setFixedWidth(1)
+        layout.addWidget(sep1)
+
+        # 数据类型
+        layout.addWidget(QLabel('数据类型:'))
         self.combo_type = QComboBox()
         self.combo_type.addItems(['auto', 'loss', 'raw'])
+        self.combo_type.setToolTip('选择数据解析模式')
         self.combo_type.currentTextChanged.connect(self._on_type_changed)
-        bar.addWidget(self.combo_type)
+        layout.addWidget(self.combo_type)
 
-        self.btn_ref = QPushButton('选择 Reference 文件')
+        # Reference 文件
+        self.btn_ref = QPushButton('  Reference')
+        self.btn_ref.setToolTip('选择参考文件用于校准')
         self.btn_ref.clicked.connect(self._on_select_ref)
-        bar.addWidget(self.btn_ref)
+        layout.addWidget(self.btn_ref)
 
-        self.lbl_ref = QLabel('未选择 Reference')
-        self.lbl_ref.setStyleSheet('color: gray; font-size: 10px;')
-        bar.addWidget(self.lbl_ref)
+        # Reference 状态
+        self.lbl_ref = QLabel(' 未选择 ')
+        self.lbl_ref.setStyleSheet(f"""
+            QLabel {{
+                color: {C['text_secondary']};
+                font-size: 11px;
+                background: transparent;
+                padding: 2px 6px;
+            }}
+        """)
+        layout.addWidget(self.lbl_ref)
 
-        self.lbl_path = QLabel('未选择文件夹')
+        layout.addStretch()
+
+        # 当前路径
+        self.lbl_path = QLabel(' 请选择数据文件夹 ')
+        self.lbl_path.setStyleSheet(f"""
+            QLabel {{
+                color: {C['text_secondary']};
+                font-size: 11px;
+                padding: 4px 8px;
+                background-color: {C['bg_input']};
+                border-radius: 4px;
+            }}
+        """)
         self.lbl_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        bar.addWidget(self.lbl_path)
+        layout.addWidget(self.lbl_path)
 
-        return bar
+        return toolbar
 
-    def _build_table(self):
+    def _build_table_panel(self):
+        """构建数据表格面板。"""
+        panel = QFrame()
+        panel.setStyleSheet(f"""
+            QFrame {{
+                background-color: {C['bg_card']};
+                border: 1px solid {C['border']};
+                border-radius: 8px;
+            }}
+        """)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # 标题栏
+        header = QLabel('  数据列表')
+        header.setStyleSheet(f"""
+            QLabel {{
+                color: {C['accent']};
+                font-size: 13px;
+                font-weight: 600;
+                padding: 10px 12px;
+                background-color: {C['bg_input']};
+                border-bottom: 1px solid {C['border']};
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+            }}
+        """)
+        layout.addWidget(header)
+
+        # 表格
         cols = ['#', 'device', 'device_no', 'port',
                 'start_nm', 'end_nm', 'step', 'range', 'source_dbm', 'data_type']
         self.table = QTableWidget(0, len(cols))
@@ -89,91 +190,288 @@ class MainWindow(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.itemDoubleClicked.connect(self._on_row_double_click)
-        return self.table
 
-    def _build_right_panel(self):
+        # 表格样式
+        self.table.setStyleSheet(f"""
+            QTableWidget {{
+                background-color: {C['bg_base']};
+                alternate-background-color: {C['bg_card']};
+                color: {C['text']};
+                gridline-color: {C['bg_input']};
+                border: none;
+                border-top: 1px solid {C['border']};
+                border-bottom-left-radius: 8px;
+                border-bottom-right-radius: 8px;
+                selection-background-color: #0d4a5a;
+                selection-color: {C['text']};
+                outline: none;
+            }}
+            QTableWidget::item {{
+                padding: 6px 8px;
+                border-bottom: 1px solid {C['bg_input']};
+            }}
+            QTableWidget::item:hover {{
+                background-color: {C['bg_hover']};
+            }}
+            QTableWidget::item:selected {{
+                background-color: #0d4a5a;
+            }}
+            QHeaderView::section {{
+                background-color: {C['bg_input']};
+                color: {C['text_secondary']};
+                font-weight: 600;
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                padding: 8px 10px;
+                border: none;
+                border-bottom: 2px solid {C['accent']};
+                border-right: 1px solid {C['border']};
+            }}
+            QHeaderView::section:hover {{
+                background-color: {C['bg_hover']};
+                color: {C['text']};
+            }}
+        """)
+        layout.addWidget(self.table)
+
+        return panel
+
+    def _build_control_panel(self):
+        """构建右侧控制面板。"""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: transparent;
+                border: none;
+            }}
+            QScrollArea > QWidget > QWidget {{
+                background-color: transparent;
+            }}
+        """)
+
         panel = QWidget()
-        vbox = QVBoxLayout(panel)
-        vbox.setSpacing(8)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(10)
 
         # 公式计算
-        grp_formula = QGroupBox('公式计算（A0, A1... 对应列表序号）')
-        fl = QVBoxLayout(grp_formula)
-        self.formula_edit = QLineEdit()
-        self.formula_edit.setPlaceholderText('例如: A12 - A1 - (A2 - A1) * 2')
-        fl.addWidget(self.formula_edit)
-        self.lbl_formula_err = QLabel('')
-        self.lbl_formula_err.setStyleSheet('color: red;')
-        fl.addWidget(self.lbl_formula_err)
-        btn_formula_plot = QPushButton('公式绘图')
-        btn_formula_plot.clicked.connect(self._on_formula_plot)
-        fl.addWidget(btn_formula_plot)
-        vbox.addWidget(grp_formula)
+        layout.addWidget(self._build_formula_group())
 
-        # 多选绘图
-        btn_multi_plot = QPushButton('绘制选中行')
+        # 绘图按钮
+        btn_multi_plot = QPushButton('  绘制选中行')
+        btn_multi_plot.setObjectName('accent')
+        btn_multi_plot.setToolTip('绘制表格中选中的数据行')
         btn_multi_plot.clicked.connect(self._on_multi_plot)
-        vbox.addWidget(btn_multi_plot)
+        layout.addWidget(btn_multi_plot)
 
         # 图像标签
-        grp_labels = QGroupBox('图像标签')
-        form_labels = QFormLayout(grp_labels)
-        self.title_edit = QLineEdit()
-        self.xlabel_edit = QLineEdit('Wavelength (nm)')
-        self.ylabel_edit = QLineEdit('Insertion Loss (dB)')
-        form_labels.addRow('标题:', self.title_edit)
-        form_labels.addRow('X 轴:', self.xlabel_edit)
-        form_labels.addRow('Y 轴:', self.ylabel_edit)
-        vbox.addWidget(grp_labels)
+        layout.addWidget(self._build_labels_group())
 
         # 坐标轴范围
-        grp_range = QGroupBox('坐标轴范围（空=自动）')
-        form_range = QFormLayout(grp_range)
+        layout.addWidget(self._build_range_group())
 
+        # 峰值分析
+        layout.addWidget(self._build_peak_panel())
+
+        # 微环分析
+        layout.addWidget(self._build_ring_panel())
+
+        layout.addStretch()
+        scroll.setWidget(panel)
+        return scroll
+
+    def _build_formula_group(self):
+        """构建公式计算分组。"""
+        grp = QGroupBox(' 公式计算 ')
+        grp.setProperty('data-type', 'formula')
+        grp.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {C['bg_card']};
+                border: 1px solid {C['accent_purple']};
+                border-radius: 8px;
+                margin-top: 14px;
+                padding: 16px 12px 12px 12px;
+                font-weight: 500;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 8px;
+                color: {C['accent_purple']};
+                background-color: {C['bg_card']};
+                border-radius: 4px;
+            }}
+        """)
+
+        vbox = QVBoxLayout(grp)
+        vbox.setSpacing(8)
+
+        hint = QLabel('使用 A0, A1, A2... 表示列表序号')
+        hint.setStyleSheet(f'color: {C["text_muted"]}; font-size: 11px; background: transparent;')
+        vbox.addWidget(hint)
+
+        self.formula_edit = QLineEdit()
+        self.formula_edit.setPlaceholderText('例如: A12 - A1 - (A2 - A1) * 2')
+        self.formula_edit.setToolTip('输入数学表达式，支持加减乘除和括号')
+        vbox.addWidget(self.formula_edit)
+
+        self.lbl_formula_err = QLabel('')
+        self.lbl_formula_err.setStyleSheet(styled_label_style('accent_error', 11))
+        vbox.addWidget(self.lbl_formula_err)
+
+        btn_formula_plot = QPushButton('  公式绘图')
+        btn_formula_plot.clicked.connect(self._on_formula_plot)
+        vbox.addWidget(btn_formula_plot)
+
+        return grp
+
+    def _build_labels_group(self):
+        """构建图像标签分组。"""
+        grp = QGroupBox(' 图像标签 ')
+        grp.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {C['bg_card']};
+                border: 1px solid {C['border']};
+                border-radius: 8px;
+                margin-top: 14px;
+                padding: 16px 12px 12px 12px;
+                font-weight: 500;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 8px;
+                color: {C['accent']};
+                background-color: {C['bg_card']};
+                border-radius: 4px;
+            }}
+        """)
+
+        form = QFormLayout(grp)
+        form.setSpacing(8)
+
+        self.title_edit = QLineEdit()
+        self.title_edit.setPlaceholderText('图像标题（可选）')
+        form.addRow('标题:', self.title_edit)
+
+        self.xlabel_edit = QLineEdit('Wavelength (nm)')
+        form.addRow('X 轴:', self.xlabel_edit)
+
+        self.ylabel_edit = QLineEdit('Insertion Loss (dB)')
+        form.addRow('Y 轴:', self.ylabel_edit)
+
+        return grp
+
+    def _build_range_group(self):
+        """构建坐标轴范围分组。"""
+        grp = QGroupBox(' 坐标轴范围 ')
+        grp.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {C['bg_card']};
+                border: 1px solid {C['border']};
+                border-radius: 8px;
+                margin-top: 14px;
+                padding: 16px 12px 12px 12px;
+                font-weight: 500;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 8px;
+                color: {C['accent']};
+                background-color: {C['bg_card']};
+                border-radius: 4px;
+            }}
+        """)
+
+        form = QFormLayout(grp)
+        form.setSpacing(8)
+
+        # X 范围
         xrange_w = QWidget()
         xrange_h = QHBoxLayout(xrange_w)
         xrange_h.setContentsMargins(0, 0, 0, 0)
+        xrange_h.setSpacing(4)
         self.xmin_edit = QLineEdit()
         self.xmax_edit = QLineEdit()
-        self.xmin_edit.setPlaceholderText('最小值')
-        self.xmax_edit.setPlaceholderText('最大值')
+        self.xmin_edit.setPlaceholderText('最小')
+        self.xmax_edit.setPlaceholderText('最大')
         xrange_h.addWidget(self.xmin_edit)
-        xrange_h.addWidget(QLabel('~'))
+        tilde_x = QLabel('~')
+        tilde_x.setStyleSheet(f'color: {C["text_muted"]}; background: transparent;')
+        tilde_x.setAlignment(Qt.AlignCenter)
+        tilde_x.setFixedWidth(20)
+        xrange_h.addWidget(tilde_x)
         xrange_h.addWidget(self.xmax_edit)
-        form_range.addRow('X 范围:', xrange_w)
+        form.addRow('X 范围:', xrange_w)
 
+        # Y 范围
         yrange_w = QWidget()
         yrange_h = QHBoxLayout(yrange_w)
         yrange_h.setContentsMargins(0, 0, 0, 0)
+        yrange_h.setSpacing(4)
         self.ymin_edit = QLineEdit()
         self.ymax_edit = QLineEdit()
-        self.ymin_edit.setPlaceholderText('最小值')
-        self.ymax_edit.setPlaceholderText('最大值')
+        self.ymin_edit.setPlaceholderText('最小')
+        self.ymax_edit.setPlaceholderText('最大')
         yrange_h.addWidget(self.ymin_edit)
-        yrange_h.addWidget(QLabel('~'))
+        tilde_y = QLabel('~')
+        tilde_y.setStyleSheet(styled_label_style('text_muted'))
+        tilde_y.setAlignment(Qt.AlignCenter)
+        tilde_y.setFixedWidth(20)
+        yrange_h.addWidget(tilde_y)
         yrange_h.addWidget(self.ymax_edit)
-        form_range.addRow('Y 范围:', yrange_w)
-        vbox.addWidget(grp_range)
+        form.addRow('Y 范围:', yrange_w)
 
-        # 峰值/谷值分析
-        vbox.addWidget(self._build_peak_panel())
+        hint = QLabel('留空表示自动范围')
+        hint.setStyleSheet(styled_label_style('text_muted', 10))
+        form.addRow('', hint)
 
-        # 微环分析
-        vbox.addWidget(self._build_ring_panel())
-
-        vbox.addStretch()
-        return panel
+        return grp
 
     def _build_peak_panel(self):
-        grp = QGroupBox('峰值 / 谷值分析')
-        vbox = QVBoxLayout(grp)
+        """构建峰值分析面板。"""
+        grp = QGroupBox(' 峰值 / 谷值分析 ')
+        grp.setProperty('data-type', 'peak')
+        grp.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {C['bg_card']};
+                border: 1px solid {C['accent_orange']};
+                border-radius: 8px;
+                margin-top: 14px;
+                padding: 16px 12px 12px 12px;
+                font-weight: 500;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 8px;
+                color: {C['accent_orange']};
+                background-color: {C['bg_card']};
+                border-radius: 4px;
+            }}
+        """)
 
+        vbox = QVBoxLayout(grp)
+        vbox.setSpacing(8)
+
+        # 峰值/谷值选择
         mode_w = QWidget()
         mode_h = QHBoxLayout(mode_w)
         mode_h.setContentsMargins(0, 0, 0, 0)
+        mode_h.setSpacing(16)
         self.radio_peak = QRadioButton('峰值（极大点）')
         self.radio_valley = QRadioButton('谷值（极小点）')
         self.radio_peak.setChecked(True)
@@ -182,62 +480,161 @@ class MainWindow(QWidget):
         self._peak_group.addButton(self.radio_valley)
         mode_h.addWidget(self.radio_peak)
         mode_h.addWidget(self.radio_valley)
+        mode_h.addStretch()
         vbox.addWidget(mode_w)
 
+        # 参数表单
         form = QFormLayout()
+        form.setSpacing(6)
+
+        # 搜索范围
         xsearch_w = QWidget()
         xsearch_h = QHBoxLayout(xsearch_w)
         xsearch_h.setContentsMargins(0, 0, 0, 0)
+        xsearch_h.setSpacing(4)
         self.peak_xmin = QLineEdit()
         self.peak_xmax = QLineEdit()
-        self.peak_xmin.setPlaceholderText('最小值（空=全范围）')
-        self.peak_xmax.setPlaceholderText('最大值（空=全范围）')
+        self.peak_xmin.setPlaceholderText('最小')
+        self.peak_xmax.setPlaceholderText('最大')
         xsearch_h.addWidget(self.peak_xmin)
-        xsearch_h.addWidget(QLabel('~'))
+        tilde = QLabel('~')
+        tilde.setStyleSheet(styled_label_style('text_muted'))
+        tilde.setAlignment(Qt.AlignCenter)
+        tilde.setFixedWidth(20)
+        xsearch_h.addWidget(tilde)
         xsearch_h.addWidget(self.peak_xmax)
-        form.addRow('搜索 X 范围:', xsearch_w)
+        form.addRow('搜索范围:', xsearch_w)
 
+        # 阈值
         self.peak_threshold = QLineEdit()
-        self.peak_threshold.setPlaceholderText('峰值阈值（dB），空=不限')
+        self.peak_threshold.setPlaceholderText('留空表示不限')
         form.addRow('阈值 (dB):', self.peak_threshold)
 
+        # 最小间距
         self.peak_distance = QLineEdit('50')
-        form.addRow('最小间距（点数）:', self.peak_distance)
+        form.addRow('最小间距:', self.peak_distance)
 
         vbox.addLayout(form)
 
-        btn_analyze = QPushButton('分析')
+        btn_analyze = QPushButton('  分析')
         btn_analyze.clicked.connect(self._on_peak_analyze)
         vbox.addWidget(btn_analyze)
 
         return grp
 
     def _build_ring_panel(self):
-        grp = QGroupBox('微环谐振器分析')
-        vbox = QVBoxLayout(grp)
+        """构建微环分析面板。"""
+        grp = QGroupBox(' 微环谐振器分析 ')
+        grp.setProperty('data-type', 'ring')
+        grp.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {C['bg_card']};
+                border: 1px solid {C['accent_green']};
+                border-radius: 8px;
+                margin-top: 14px;
+                padding: 16px 12px 12px 12px;
+                font-weight: 500;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 8px;
+                color: {C['accent_green']};
+                background-color: {C['bg_card']};
+                border-radius: 4px;
+            }}
+        """)
 
+        vbox = QVBoxLayout(grp)
+        vbox.setSpacing(8)
+
+        # 波长范围
         form = QFormLayout()
+        form.setSpacing(6)
+
         xrange_w = QWidget()
         xrange_h = QHBoxLayout(xrange_w)
         xrange_h.setContentsMargins(0, 0, 0, 0)
+        xrange_h.setSpacing(4)
         self.ring_xmin = QLineEdit()
         self.ring_xmax = QLineEdit()
-        self.ring_xmin.setPlaceholderText('起始（空=全范围）')
-        self.ring_xmax.setPlaceholderText('终止（空=全范围）')
+        self.ring_xmin.setPlaceholderText('起始')
+        self.ring_xmax.setPlaceholderText('终止')
         xrange_h.addWidget(self.ring_xmin)
-        xrange_h.addWidget(QLabel('~'))
+        tilde = QLabel('~')
+        tilde.setStyleSheet(styled_label_style('text_muted'))
+        tilde.setAlignment(Qt.AlignCenter)
+        tilde.setFixedWidth(20)
+        xrange_h.addWidget(tilde)
         xrange_h.addWidget(self.ring_xmax)
         form.addRow('波长范围 (nm):', xrange_w)
+
         vbox.addLayout(form)
 
-        self.chk_ring_holdon = QCheckBox('显示单峰拟合（最多10个，按范围抽样）')
+        self.chk_ring_holdon = QCheckBox('显示单峰拟合（最多10个）')
         vbox.addWidget(self.chk_ring_holdon)
 
-        btn_ring = QPushButton('微环分析')
+        btn_ring = QPushButton('  微环分析')
         btn_ring.clicked.connect(self._on_ring_analyze)
         vbox.addWidget(btn_ring)
 
         return grp
+
+    def _build_log_panel(self):
+        """构建底部日志面板。"""
+        panel = QFrame()
+        panel.setStyleSheet(f"""
+            QFrame {{
+                background-color: {C['bg_base']};
+                border: 1px solid {C['border']};
+                border-radius: 6px;
+            }}
+        """)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # 标题
+        header = QLabel('  输出日志')
+        header.setStyleSheet(f"""
+            QLabel {{
+                color: {C['text_muted']};
+                font-size: 10px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                padding: 4px 10px;
+                background-color: {C['bg_card']};
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+            }}
+        """)
+        layout.addWidget(header)
+
+        # 日志内容
+        self.log = QTextEdit()
+        self.log.setObjectName('log')
+        self.log.setReadOnly(True)
+        self.log.setFixedHeight(100)
+        self.log.setFont(QFont('Cascadia Code', 9))
+        self.log.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {C['bg_base']};
+                color: {C['text_secondary']};
+                border: none;
+                border-top: 1px solid {C['bg_input']};
+                border-bottom-left-radius: 6px;
+                border-bottom-right-radius: 6px;
+                padding: 6px 8px;
+                font-family: 'Cascadia Code', 'Consolas', monospace;
+                font-size: 11px;
+            }}
+        """)
+        layout.addWidget(self.log)
+
+        return panel
 
     def _redirect_stdout(self):
         redirect_stdout_to(self.log)
@@ -251,12 +648,12 @@ class MainWindow(QWidget):
         if path:
             self.ref_path = path
             short = path.split('/')[-1].split('\\')[-1]
-            self.lbl_ref.setText(short)
-            self.lbl_ref.setStyleSheet('color: green; font-size: 10px;')
+            self.lbl_ref.setText(f' {short} ')
+            set_status_label(self.lbl_ref, 'success')
             print(f'Reference 文件: {path}')
             if self.mgr is not None:
-                folder = self.lbl_path.text()
-                if folder and folder != '未选择文件夹':
+                folder = self.lbl_path.text().replace(' ', '').replace('请选择数据文件夹', '')
+                if folder:
                     dtype = self.combo_type.currentText()
                     try:
                         self.mgr = SpectraManager.from_folder(
@@ -271,7 +668,10 @@ class MainWindow(QWidget):
         folder = QFileDialog.getExistingDirectory(self, '选择数据文件夹')
         if not folder:
             return
-        self.lbl_path.setText(folder)
+        short_path = folder
+        if len(folder) > 50:
+            short_path = '...' + folder[-47:]
+        self.lbl_path.setText(f' {short_path} ')
         dtype = self.combo_type.currentText()
         ref = self.ref_path
         try:
@@ -318,17 +718,10 @@ class MainWindow(QWidget):
         xlabel = self.xlabel_edit.text().strip() or 'Wavelength (nm)'
         ylabel = self.ylabel_edit.text().strip() or 'Insertion Loss (dB)'
 
-        def _pf(edit):
-            t = edit.text().strip()
-            try:
-                return float(t) if t else None
-            except ValueError:
-                return None
-
-        xmin = _pf(self.xmin_edit)
-        xmax = _pf(self.xmax_edit)
-        ymin = _pf(self.ymin_edit)
-        ymax = _pf(self.ymax_edit)
+        xmin = _parse_float_edit(self.xmin_edit)
+        xmax = _parse_float_edit(self.xmax_edit)
+        ymin = _parse_float_edit(self.ymin_edit)
+        ymax = _parse_float_edit(self.ymax_edit)
         xlim = (xmin, xmax) if (xmin is not None and xmax is not None) else None
         ylim = (ymin, ymax) if (ymin is not None and ymax is not None) else None
         return title, xlabel, ylabel, xlim, ylim
@@ -460,15 +853,8 @@ class MainWindow(QWidget):
             return
         x, y, label, source_desc = result
 
-        def _pf(edit):
-            t = edit.text().strip()
-            try:
-                return float(t) if t else None
-            except ValueError:
-                return None
-
-        xmin = _pf(self.peak_xmin)
-        xmax = _pf(self.peak_xmax)
+        xmin = _parse_float_edit(self.peak_xmin)
+        xmax = _parse_float_edit(self.peak_xmax)
         threshold_str = self.peak_threshold.text().strip()
         threshold = float(threshold_str) if threshold_str else None
 
@@ -526,15 +912,8 @@ class MainWindow(QWidget):
             return
         x, y, label, source_desc = result
 
-        def _pf(edit):
-            t = edit.text().strip()
-            try:
-                return float(t) if t else None
-            except ValueError:
-                return None
-
-        xmin = _pf(self.ring_xmin)
-        xmax = _pf(self.ring_xmax)
+        xmin = _parse_float_edit(self.ring_xmin)
+        xmax = _parse_float_edit(self.ring_xmax)
         range_nm = (xmin, xmax) if (xmin is not None and xmax is not None) else None
 
         try:

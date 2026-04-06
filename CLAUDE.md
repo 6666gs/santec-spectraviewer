@@ -18,7 +18,7 @@ python main.py
 
 ```
 spectraviewer/
-├── main.py                     # 入口 (Qt5Agg + 中文字体)
+├── main.py                     # 入口 (高 DPI + matplotlib 配置)
 │
 ├── core/                       # 数据层 (无 PyQt5 依赖)
 │   ├── io.py                   # CSV 读取
@@ -33,6 +33,7 @@ spectraviewer/
 │
 ├── gui/                        # GUI 层 (PyQt5)
 │   ├── main_window.py          # MainWindow 主窗口
+│   ├── styles.py               # 暗色主题样式定义
 │   └── widgets.py              # 通用组件
 │
 └── visualization/              # 可视化 (仅 matplotlib)
@@ -59,13 +60,20 @@ spectraviewer/
 ### gui/ — GUI 层
 
 - **`main_window.py`**: `MainWindow` — 主窗口
+  - 顶部工具栏：文件夹选择、数据类型、Reference 文件
   - 左侧表格：元数据列表
-  - 右侧面板：公式计算、峰值分析、微环分析
+  - 右侧面板：公式计算、峰值分析、微环分析（滚动区域）
   - 底部：日志输出
+
+- **`styles.py`**: 暗色主题样式
+  - `COLORS`: 颜色常量字典
+  - `apply_styles()`: 应用全局样式
+  - `group_box_style()`: 生成 QGroupBox 样式
+  - `styled_label_style()`: 生成标签样式
 
 ### visualization/ — 可视化层
 
-- **`plotter.py`**: `plot_publication()` — 出版质量图像
+- **`plotter.py`**: `plot_publication()` — 出版质量图像（白色背景，便于分享）
 
 ## 关键设计
 
@@ -73,8 +81,33 @@ spectraviewer/
 - `core/` 和 `analysis/` 禁止导入 PyQt5
 - 分析逻辑与 GUI 严格分离
 
+**UI 设计理念**:
+- Laboratory Precision：暗色主题，科学仪器美学
+- 功能区颜色编码：紫色=公式、橙色=峰值、绿色=微环
+- 弹窗绘图保持白色背景，便于分享
+
 **文件名编码**: SANTEC CSV 文件名如 `chip_dev_no_port_1500_1630_step1pm_range2_source0dbm_loss.csv`
 
 **多量程拼接**: raw 扫描的多量程数据自动拼接
 
 **中文界面**: matplotlib 配置 Microsoft YaHei/SimHei 字体
+
+## 样式使用
+
+```python
+from gui.styles import COLORS, group_box_style, styled_label_style
+
+C = COLORS
+
+# 使用颜色常量
+color = C['accent']  # 青色强调
+
+# QGroupBox 样式
+grp.setStyleSheet(group_box_style(C['accent_purple']))
+
+# 标签样式
+label.setStyleSheet(styled_label_style('text_muted', 10))
+```
+
+## currentDate
+Today's date is 2026/04/06.
