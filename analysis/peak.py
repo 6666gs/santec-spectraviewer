@@ -75,14 +75,19 @@ def calc_3db_bandwidth(
     y: np.ndarray,
     peak_idx: int,
     is_peak: bool = True,
+    max_window: int = 500,
 ) -> float | None:
-    """计算 3dB 带宽。
+    """计算 3dB 带宽（自适应窗口）。
+
+    从峰/谷位置开始向外扩展搜索，找到第一个 3dB 交叉点。
+    适用于"谷中峰"等复杂基线情况。
 
     Args:
         x: x 坐标数组
         y: y 值数组
         peak_idx: 峰/谷索引
         is_peak: True 为峰值，False 为谷值
+        max_window: 最大搜索窗口（单侧点数），默认 500
 
     Returns:
         3dB 带宽 (x 单位)，无法计算时返回 None
@@ -90,33 +95,53 @@ def calc_3db_bandwidth(
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
 
+    if peak_idx < 0 or peak_idx >= len(x):
+        return None
+
+    # 计算搜索边界
+    left_bound = max(0, peak_idx - max_window)
+    right_bound = min(len(y), peak_idx + max_window + 1)
+
     if is_peak:
         # 峰值：从峰顶向下 3dB
         half = y[peak_idx] - 3.0
-        try:
-            left = int(np.max(np.where(y[:peak_idx] <= half)[0]))
-        except ValueError:
-            left = 0
-        try:
-            right = int(np.min(np.where(y[peak_idx:] <= half)[0]) + peak_idx)
-        except ValueError:
-            right = len(x) - 1
+
+        # 向左搜索第一个 y <= half 的点
+        left = peak_idx
+        for i in range(peak_idx - 1, left_bound - 1, -1):
+            if y[i] <= half:
+                left = i
+                break
+
+        # 向右搜索第一个 y <= half 的点
+        right = peak_idx
+        for i in range(peak_idx + 1, right_bound):
+            if y[i] <= half:
+                right = i
+                break
     else:
-        # 谷值：谷两侧较大值向下 3dB
-        left_seg = y[:peak_idx]
-        right_seg = y[peak_idx:]
+        # 谷值：计算局部基线
+        left_seg = y[left_bound:peak_idx]
+        right_seg = y[peak_idx + 1:right_bound]
+
         left_max = float(np.max(left_seg)) if len(left_seg) > 0 else y[peak_idx]
         right_max = float(np.max(right_seg)) if len(right_seg) > 0 else y[peak_idx]
         ref_level = (left_max + right_max) / 2.0
         half = ref_level - 3.0
-        try:
-            left = int(np.max(np.where(y[:peak_idx] >= half)[0]))
-        except ValueError:
-            left = 0
-        try:
-            right = int(np.min(np.where(y[peak_idx:] >= half)[0]) + peak_idx)
-        except ValueError:
-            right = len(x) - 1
+
+        # 向左搜索第一个 y >= half 的点
+        left = peak_idx
+        for i in range(peak_idx - 1, left_bound - 1, -1):
+            if y[i] >= half:
+                left = i
+                break
+
+        # 向右搜索第一个 y >= half 的点
+        right = peak_idx
+        for i in range(peak_idx + 1, right_bound):
+            if y[i] >= half:
+                right = i
+                break
 
     if left >= right:
         return None
