@@ -20,8 +20,10 @@ from gui.styles import apply_styles
 def configure_matplotlib():
     """配置 matplotlib 后端和中文字体。"""
     import matplotlib
+
     matplotlib.use('Qt5Agg')
     import matplotlib.pyplot as plt
+
     plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
 

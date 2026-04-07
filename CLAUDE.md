@@ -85,6 +85,8 @@ spectraviewer/
 - Laboratory Precision：暗色主题，科学仪器美学
 - 功能区颜色编码：紫色=公式、橙色=峰值、绿色=微环
 - 弹窗绘图保持白色背景，便于分享
+- 弹窗工具栏使用浅色样式（`_TOOLBAR_LIGHT_STYLE`），避免暗色主题下看不清按钮
+- 峰值/谷值标注智能定位：根据峰谷在 y 轴中的相对位置自动调整标注方向，确保文字始终在绘图区域内
 
 **文件名编码**: SANTEC CSV 文件名如 `chip_dev_no_port_1500_1630_step1pm_range2_source0dbm_loss.csv`
 
@@ -110,4 +112,4 @@ label.setStyleSheet(styled_label_style('text_muted', 10))
 ```
 
 ## currentDate
-Today's date is 2026/04/06.
+Today's date is 2026/04/07.

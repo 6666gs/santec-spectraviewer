@@ -12,11 +12,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
-    QLabel, QLineEdit, QPushButton, QComboBox, QTableWidget,
-    QTableWidgetItem, QTextEdit, QFileDialog, QRadioButton,
-    QButtonGroup, QAbstractItemView, QSizePolicy, QHeaderView,
-    QSplitter, QCheckBox, QFrame, QScrollArea,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QComboBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QFileDialog,
+    QRadioButton,
+    QButtonGroup,
+    QAbstractItemView,
+    QSizePolicy,
+    QHeaderView,
+    QSplitter,
+    QCheckBox,
+    QFrame,
+    QScrollArea,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -27,10 +44,50 @@ from visualization.plotter import plot_publication
 from analysis.ring import Ring
 from analysis.peak import analyze_peaks, calc_3db_bandwidth, format_peak_results
 from .widgets import redirect_stdout_to
-from .styles import apply_styles, set_status_label, COLORS, group_box_style, styled_label_style
+from .styles import (
+    apply_styles,
+    set_status_label,
+    COLORS,
+    group_box_style,
+    styled_label_style,
+)
 
 # 颜色常量
 C = COLORS
+
+# 浅色工具栏样式（覆盖全局暗色主题，用于弹出绘图窗口）
+_TOOLBAR_LIGHT_STYLE = """
+QToolBar {
+    background-color: #e8e8e8;
+    border-bottom: 1px solid #c0c0c0;
+    spacing: 3px;
+    padding: 2px 4px;
+}
+QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    padding: 3px 5px;
+}
+QToolButton:hover {
+    background-color: #d0d0d0;
+    border-color: #b0b0b0;
+}
+QToolButton:pressed {
+    background-color: #c0c0c0;
+}
+QToolButton:checked {
+    background-color: #c8ddf0;
+    border-color: #8ab4e0;
+}
+QStatusBar {
+    background-color: #f0f0f0;
+    color: #333333;
+}
+QStatusBar QLabel {
+    color: #333333;
+}
+"""
 
 
 def _parse_float_edit(edit):
@@ -53,6 +110,16 @@ class MainWindow(QWidget):
         self._build_ui()
         self._redirect_stdout()
         apply_styles(self)
+
+    # ── 弹出绘图窗口工具栏样式 ──────────────────────────────────────────────
+    @staticmethod
+    def _style_popup(fig):
+        """给弹出绘图窗口应用浅色工具栏样式。"""
+        try:
+            window = fig.canvas.manager.window
+            window.setStyleSheet(_TOOLBAR_LIGHT_STYLE)
+        except Exception:
+            pass
 
     # ── UI 构建 ──────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -78,7 +145,8 @@ class MainWindow(QWidget):
         """构建顶部工具栏。"""
         toolbar = QFrame()
         toolbar.setObjectName('toolbar')
-        toolbar.setStyleSheet(f"""
+        toolbar.setStyleSheet(
+            f"""
             QFrame#toolbar {{
                 background-color: {C['bg_card']};
                 border: 1px solid {C['border']};
@@ -88,7 +156,8 @@ class MainWindow(QWidget):
                 background: transparent;
                 color: {C['text']};
             }}
-        """)
+        """
+        )
 
         layout = QHBoxLayout(toolbar)
         layout.setContentsMargins(12, 8, 12, 8)
@@ -123,21 +192,24 @@ class MainWindow(QWidget):
 
         # Reference 状态
         self.lbl_ref = QLabel(' 未选择 ')
-        self.lbl_ref.setStyleSheet(f"""
+        self.lbl_ref.setStyleSheet(
+            f"""
             QLabel {{
                 color: {C['text_secondary']};
                 font-size: 11px;
                 background: transparent;
                 padding: 2px 6px;
             }}
-        """)
+        """
+        )
         layout.addWidget(self.lbl_ref)
 
         layout.addStretch()
 
         # 当前路径
         self.lbl_path = QLabel(' 请选择数据文件夹 ')
-        self.lbl_path.setStyleSheet(f"""
+        self.lbl_path.setStyleSheet(
+            f"""
             QLabel {{
                 color: {C['text_secondary']};
                 font-size: 11px;
@@ -145,7 +217,8 @@ class MainWindow(QWidget):
                 background-color: {C['bg_input']};
                 border-radius: 4px;
             }}
-        """)
+        """
+        )
         self.lbl_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout.addWidget(self.lbl_path)
 
@@ -154,13 +227,15 @@ class MainWindow(QWidget):
     def _build_table_panel(self):
         """构建数据表格面板。"""
         panel = QFrame()
-        panel.setStyleSheet(f"""
+        panel.setStyleSheet(
+            f"""
             QFrame {{
                 background-color: {C['bg_card']};
                 border: 1px solid {C['border']};
                 border-radius: 8px;
             }}
-        """)
+        """
+        )
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -168,7 +243,8 @@ class MainWindow(QWidget):
 
         # 标题栏
         header = QLabel('  数据列表')
-        header.setStyleSheet(f"""
+        header.setStyleSheet(
+            f"""
             QLabel {{
                 color: {C['accent']};
                 font-size: 13px;
@@ -179,12 +255,23 @@ class MainWindow(QWidget):
                 border-top-left-radius: 8px;
                 border-top-right-radius: 8px;
             }}
-        """)
+        """
+        )
         layout.addWidget(header)
 
         # 表格
-        cols = ['#', 'device', 'device_no', 'port',
-                'start_nm', 'end_nm', 'step', 'range', 'source_dbm', 'data_type']
+        cols = [
+            '#',
+            'device',
+            'device_no',
+            'port',
+            'start_nm',
+            'end_nm',
+            'step',
+            'range',
+            'source_dbm',
+            'data_type',
+        ]
         self.table = QTableWidget(0, len(cols))
         self.table.setHorizontalHeaderLabels(cols)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -197,7 +284,8 @@ class MainWindow(QWidget):
         self.table.itemDoubleClicked.connect(self._on_row_double_click)
 
         # 表格样式
-        self.table.setStyleSheet(f"""
+        self.table.setStyleSheet(
+            f"""
             QTableWidget {{
                 background-color: {C['bg_base']};
                 alternate-background-color: {C['bg_card']};
@@ -237,7 +325,8 @@ class MainWindow(QWidget):
                 background-color: {C['bg_hover']};
                 color: {C['text']};
             }}
-        """)
+        """
+        )
         layout.addWidget(self.table)
 
         return panel
@@ -247,7 +336,8 @@ class MainWindow(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"""
+        scroll.setStyleSheet(
+            f"""
             QScrollArea {{
                 background-color: transparent;
                 border: none;
@@ -255,7 +345,8 @@ class MainWindow(QWidget):
             QScrollArea > QWidget > QWidget {{
                 background-color: transparent;
             }}
-        """)
+        """
+        )
 
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -292,7 +383,8 @@ class MainWindow(QWidget):
         """构建公式计算分组。"""
         grp = QGroupBox(' 公式计算 ')
         grp.setProperty('data-type', 'formula')
-        grp.setStyleSheet(f"""
+        grp.setStyleSheet(
+            f"""
             QGroupBox {{
                 background-color: {C['bg_card']};
                 border: 1px solid {C['accent_purple']};
@@ -310,13 +402,16 @@ class MainWindow(QWidget):
                 background-color: {C['bg_card']};
                 border-radius: 4px;
             }}
-        """)
+        """
+        )
 
         vbox = QVBoxLayout(grp)
         vbox.setSpacing(8)
 
         hint = QLabel('使用 A0, A1, A2... 表示列表序号')
-        hint.setStyleSheet(f'color: {C["text_muted"]}; font-size: 11px; background: transparent;')
+        hint.setStyleSheet(
+            f'color: {C["text_muted"]}; font-size: 11px; background: transparent;'
+        )
         vbox.addWidget(hint)
 
         self.formula_edit = QLineEdit()
@@ -337,7 +432,8 @@ class MainWindow(QWidget):
     def _build_labels_group(self):
         """构建图像标签分组。"""
         grp = QGroupBox(' 图像标签 ')
-        grp.setStyleSheet(f"""
+        grp.setStyleSheet(
+            f"""
             QGroupBox {{
                 background-color: {C['bg_card']};
                 border: 1px solid {C['border']};
@@ -355,7 +451,8 @@ class MainWindow(QWidget):
                 background-color: {C['bg_card']};
                 border-radius: 4px;
             }}
-        """)
+        """
+        )
 
         form = QFormLayout(grp)
         form.setSpacing(8)
@@ -375,7 +472,8 @@ class MainWindow(QWidget):
     def _build_range_group(self):
         """构建坐标轴范围分组。"""
         grp = QGroupBox(' 坐标轴范围 ')
-        grp.setStyleSheet(f"""
+        grp.setStyleSheet(
+            f"""
             QGroupBox {{
                 background-color: {C['bg_card']};
                 border: 1px solid {C['border']};
@@ -393,7 +491,8 @@ class MainWindow(QWidget):
                 background-color: {C['bg_card']};
                 border-radius: 4px;
             }}
-        """)
+        """
+        )
 
         form = QFormLayout(grp)
         form.setSpacing(8)
@@ -444,7 +543,8 @@ class MainWindow(QWidget):
         """构建峰值分析面板。"""
         grp = QGroupBox(' 峰值 / 谷值分析 ')
         grp.setProperty('data-type', 'peak')
-        grp.setStyleSheet(f"""
+        grp.setStyleSheet(
+            f"""
             QGroupBox {{
                 background-color: {C['bg_card']};
                 border: 1px solid {C['accent_orange']};
@@ -462,7 +562,8 @@ class MainWindow(QWidget):
                 background-color: {C['bg_card']};
                 border-radius: 4px;
             }}
-        """)
+        """
+        )
 
         vbox = QVBoxLayout(grp)
         vbox.setSpacing(8)
@@ -526,7 +627,8 @@ class MainWindow(QWidget):
         """构建微环分析面板。"""
         grp = QGroupBox(' 微环谐振器分析 ')
         grp.setProperty('data-type', 'ring')
-        grp.setStyleSheet(f"""
+        grp.setStyleSheet(
+            f"""
             QGroupBox {{
                 background-color: {C['bg_card']};
                 border: 1px solid {C['accent_green']};
@@ -544,7 +646,8 @@ class MainWindow(QWidget):
                 background-color: {C['bg_card']};
                 border-radius: 4px;
             }}
-        """)
+        """
+        )
 
         vbox = QVBoxLayout(grp)
         vbox.setSpacing(8)
@@ -584,13 +687,15 @@ class MainWindow(QWidget):
     def _build_log_panel(self):
         """构建底部日志面板。"""
         panel = QFrame()
-        panel.setStyleSheet(f"""
+        panel.setStyleSheet(
+            f"""
             QFrame {{
                 background-color: {C['bg_base']};
                 border: 1px solid {C['border']};
                 border-radius: 6px;
             }}
-        """)
+        """
+        )
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -598,7 +703,8 @@ class MainWindow(QWidget):
 
         # 标题
         header = QLabel('  输出日志')
-        header.setStyleSheet(f"""
+        header.setStyleSheet(
+            f"""
             QLabel {{
                 color: {C['text_muted']};
                 font-size: 10px;
@@ -610,7 +716,8 @@ class MainWindow(QWidget):
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
             }}
-        """)
+        """
+        )
         layout.addWidget(header)
 
         # 日志内容
@@ -619,7 +726,8 @@ class MainWindow(QWidget):
         self.log.setReadOnly(True)
         self.log.setFixedHeight(100)
         self.log.setFont(QFont('Cascadia Code', 9))
-        self.log.setStyleSheet(f"""
+        self.log.setStyleSheet(
+            f"""
             QTextEdit {{
                 background-color: {C['bg_base']};
                 color: {C['text_secondary']};
@@ -631,7 +739,8 @@ class MainWindow(QWidget):
                 font-family: 'Cascadia Code', 'Consolas', monospace;
                 font-size: 11px;
             }}
-        """)
+        """
+        )
         layout.addWidget(self.log)
 
         return panel
@@ -644,7 +753,9 @@ class MainWindow(QWidget):
         pass
 
     def _on_select_ref(self):
-        path, _ = QFileDialog.getOpenFileName(self, '选择 Reference 文件', '', 'CSV 文件 (*.csv)')
+        path, _ = QFileDialog.getOpenFileName(
+            self, '选择 Reference 文件', '', 'CSV 文件 (*.csv)'
+        )
         if path:
             self.ref_path = path
             short = path.split('/')[-1].split('\\')[-1]
@@ -652,7 +763,11 @@ class MainWindow(QWidget):
             set_status_label(self.lbl_ref, 'success')
             print(f'Reference 文件: {path}')
             if self.mgr is not None:
-                folder = self.lbl_path.text().replace(' ', '').replace('请选择数据文件夹', '')
+                folder = (
+                    self.lbl_path.text()
+                    .replace(' ', '')
+                    .replace('请选择数据文件夹', '')
+                )
                 if folder:
                     dtype = self.combo_type.currentText()
                     try:
@@ -688,8 +803,18 @@ class MainWindow(QWidget):
             return
         df = self.mgr.table
         self.table.setRowCount(0)
-        cols = ['index', 'device', 'device_no', 'port',
-                'start_nm', 'end_nm', 'step', 'range', 'source_dbm', 'data_type']
+        cols = [
+            'index',
+            'device',
+            'device_no',
+            'port',
+            'start_nm',
+            'end_nm',
+            'step',
+            'range',
+            'source_dbm',
+            'data_type',
+        ]
         for _, row in df.iterrows():
             r = self.table.rowCount()
             self.table.insertRow(r)
@@ -745,8 +870,10 @@ class MainWindow(QWidget):
                 print(f'读取索引 {idx} 失败: {e}')
         if not data_list:
             return
-        fig, ax = plot_publication(data_list, xlabel=xlabel, ylabel=ylabel,
-                                   title=title, xlim=xlim, ylim=ylim)
+        fig, ax = plot_publication(
+            data_list, xlabel=xlabel, ylabel=ylabel, title=title, xlim=xlim, ylim=ylim
+        )
+        self._style_popup(fig)
         plt.show(block=False)
         return fig, ax
 
@@ -770,8 +897,13 @@ class MainWindow(QWidget):
         label = expr
         fig, ax = plot_publication(
             [{'x': x_result, 'y': y_result, 'label': label}],
-            xlabel=xlabel, ylabel=ylabel, title=title, xlim=xlim, ylim=ylim,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            title=title,
+            xlim=xlim,
+            ylim=ylim,
         )
+        self._style_popup(fig)
         plt.show(block=False)
         return fig, ax
 
@@ -868,8 +1000,14 @@ class MainWindow(QWidget):
         is_peak = self.radio_peak.isChecked()
 
         # 调用分析模块
-        results = analyze_peaks(x, y, is_peak=is_peak, x_range=x_range,
-                                threshold=threshold, distance=distance)
+        results = analyze_peaks(
+            x,
+            y,
+            is_peak=is_peak,
+            x_range=x_range,
+            threshold=threshold,
+            distance=distance,
+        )
 
         if len(results['peaks_idx']) == 0:
             print(f'未找到{"峰值" if is_peak else "谷值"}，尝试调整阈值或搜索范围')
@@ -879,7 +1017,11 @@ class MainWindow(QWidget):
         title, xlabel, ylabel, xlim, ylim = self._get_plot_params()
         fig, ax = plot_publication(
             [{'x': x, 'y': y, 'label': label}],
-            xlabel=xlabel, ylabel=ylabel, title=title, xlim=xlim, ylim=ylim,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            title=title,
+            xlim=xlim,
+            ylim=ylim,
         )
 
         print(f'\n{"峰值" if is_peak else "谷值"}分析结果（{source_desc}）:')
@@ -887,15 +1029,24 @@ class MainWindow(QWidget):
         for line in lines:
             print(line)
 
-        # 标注
+        # 标注 — 智能定位，确保文字始终在绘图区域内
+        y_lo, y_hi = ax.get_ylim()
+        y_range = y_hi - y_lo if y_hi != y_lo else 1
         for i, (px, py) in enumerate(zip(results['x_peaks'], results['y_peaks'])):
             bw = calc_3db_bandwidth(x, y, results['peaks_idx'][i], is_peak)
             bw_str = f'{bw:.4f} nm' if bw is not None else 'N/A'
             ax.axvline(px, color='red', linestyle='--', linewidth=1, alpha=0.7)
+            # 根据峰/谷在 y 轴中的位置决定标注方向（像素偏移）
+            rel = (py - y_lo) / y_range
+            if is_peak:
+                y_off = -25 if rel > 0.7 else 25
+            else:
+                y_off = 25 if rel < 0.3 else -25
             ax.annotate(
                 f'{px:.3f} nm\n{py:.2f} dB\nBW={bw_str}',
                 xy=(px, py),
-                xytext=(px, py + (3 if is_peak else -3)),
+                xytext=(0, y_off),
+                textcoords='offset points',
                 fontsize=8,
                 color='red',
                 ha='center',
@@ -903,6 +1054,7 @@ class MainWindow(QWidget):
             )
 
         fig.canvas.draw()
+        self._style_popup(fig)
         plt.show(block=False)
 
     # ── 微环谐振器分析 ────────────────────────────────────────────────────────
@@ -923,12 +1075,24 @@ class MainWindow(QWidget):
             print(f'FSR 均值: {ring.fsr_mean:.4f} nm')
             holdon = self.chk_ring_holdon.isChecked()
             fig_q = ring.cal_Q(holdon=holdon, max_holdon=10)
+            self._style_popup(fig_fsr)
+            self._style_popup(fig_q)
             plt.show(block=False)
             if hasattr(ring, 'fit_results') and ring.fit_results:
-                ql_vals = [r['Ql'] for r in ring.fit_results if np.isfinite(r['Ql']) and r['Ql'] > 0]
-                qi_vals = [r['Qi'] for r in ring.fit_results if np.isfinite(r['Qi']) and r['Qi'] > 0]
+                ql_vals = [
+                    r['Ql']
+                    for r in ring.fit_results
+                    if np.isfinite(r['Ql']) and r['Ql'] > 0
+                ]
+                qi_vals = [
+                    r['Qi']
+                    for r in ring.fit_results
+                    if np.isfinite(r['Qi']) and r['Qi'] > 0
+                ]
                 if ql_vals:
-                    print(f'Ql 均值: {np.mean(ql_vals):.0f}  (共 {len(ql_vals)} 个有效峰)')
+                    print(
+                        f'Ql 均值: {np.mean(ql_vals):.0f}  (共 {len(ql_vals)} 个有效峰)'
+                    )
                 if qi_vals:
                     print(f'Qi 均值: {np.mean(qi_vals):.0f}')
         except Exception as e:

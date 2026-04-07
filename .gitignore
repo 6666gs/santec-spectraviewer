@@ -21,6 +21,9 @@ ENV/
 # 本地配置
 .claude/settings.local.json
 
+# 插件生成
+docs/superpowers/
+
 # 输出文件
 test_outputs/
 *.png
