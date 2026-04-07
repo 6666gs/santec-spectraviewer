@@ -42,6 +42,9 @@ def analyze_peaks(
             mask &= x >= xmin
         if xmax is not None:
             mask &= x <= xmax
+
+    # 记录原始索引
+    original_indices = np.where(mask)[0]
     x_s, y_s = x[mask], y[mask]
 
     if len(x_s) < 3:
@@ -57,14 +60,17 @@ def analyze_peaks(
             kwargs['height'] = -threshold
 
     if is_peak:
-        peaks_idx, _ = find_peaks(y_s, **kwargs)
+        peaks_idx_filtered, _ = find_peaks(y_s, **kwargs)
     else:
-        peaks_idx, _ = find_peaks(-y_s, **kwargs)
+        peaks_idx_filtered, _ = find_peaks(-y_s, **kwargs)
+
+    # 将过滤后的索引映射回原始数据的索引
+    peaks_idx = original_indices[peaks_idx_filtered]
 
     return {
         'peaks_idx': peaks_idx,
-        'x_peaks': x_s[peaks_idx],
-        'y_peaks': y_s[peaks_idx],
+        'x_peaks': x[peaks_idx],
+        'y_peaks': y[peaks_idx],
         'x_full': x,
         'y_full': y,
     }
@@ -75,7 +81,7 @@ def calc_3db_bandwidth(
     y: np.ndarray,
     peak_idx: int,
     is_peak: bool = True,
-    max_window: int = 500,
+    max_window: int = 5000,
 ) -> float | None:
     """计算 3dB 带宽（自适应窗口）。
 
@@ -87,7 +93,7 @@ def calc_3db_bandwidth(
         y: y 值数组
         peak_idx: 峰/谷索引
         is_peak: True 为峰值，False 为谷值
-        max_window: 最大搜索窗口（单侧点数），默认 500
+        max_window: 最大搜索窗口（单侧点数），默认 5000
 
     Returns:
         3dB 带宽 (x 单位)，无法计算时返回 None
