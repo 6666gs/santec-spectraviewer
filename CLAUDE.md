@@ -82,10 +82,12 @@ spectraviewer/
 - 分析逻辑与 GUI 严格分离
 
 **UI 设计理念**:
-- Laboratory Precision：暗色主题，科学仪器美学
+- Apple Design Language：亮色主题，简洁现代
+- Apple Blue (#0071e3) 作为主强调色
 - 功能区颜色编码：紫色=公式、橙色=峰值、绿色=微环
+- 药丸形按钮 (border-radius: 980px)
 - 弹窗绘图保持白色背景，便于分享
-- 弹窗工具栏使用浅色样式（`_TOOLBAR_LIGHT_STYLE`），避免暗色主题下看不清按钮
+- 弹窗工具栏使用浅色样式（`_TOOLBAR_LIGHT_STYLE`）
 - 峰值/谷值标注智能定位：根据峰谷在 y 轴中的相对位置自动调整标注方向，确保文字始终在绘图区域内
 
 **文件名编码**: SANTEC CSV 文件名如 `chip_dev_no_port_1500_1630_step1pm_range2_source0dbm_loss.csv`

@@ -1,38 +1,38 @@
 # gui/styles.py — SpectraViewer UI 样式
-"""现代化暗色主题样式表。
+"""Apple 亮色主题样式表。
 
-设计理念: Laboratory Precision
-- 统一的深色背景，避免视觉割裂
-- 青色/蓝绿色作为主强调色，体现科学仪器感
-- 清晰的视觉层次，卡片式布局
-- 柔和的渐变和圆角，现代感十足
+设计理念: Apple Design Language
+- Apple 浅灰背景 (#f5f5f7)，干净简洁
+- Apple Blue (#0071e3) 作为主强调色
+- 功能区保留多色编码（紫色=公式、橙色=峰值、绿色=微环）
+- 药丸形按钮 (980px 圆角)
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 颜色定义 - 统一的深灰色调
+# 颜色定义 - Apple 亮色主题
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 主背景色（统一使用）
-BG_BASE = "#1a1d23"          # 主背景
-BG_CARD = "#22262e"          # 卡片背景
-BG_INPUT = "#2a2f38"         # 输入框背景
-BG_HOVER = "#333840"         # 悬停背景
+# 背景色
+BG_BASE = "#f5f5f7"          # 主背景 - Apple 浅灰
+BG_CARD = "#ffffff"          # 卡片背景 - 白色
+BG_INPUT = "#fafafc"         # 输入框背景 - Apple 搜索框色
+BG_HOVER = "#e8e8ed"          # 悬停背景
 
 # 强调色
-ACCENT_PRIMARY = "#00d9ff"   # 主强调色（青色）
-ACCENT_SECONDARY = "#7ee787" # 次强调色（绿色）
+ACCENT_PRIMARY = "#0071e3"   # 主强调色 - Apple Blue
+ACCENT_SECONDARY = "#34c759" # 次强调色（绿色）
 ACCENT_WARNING = "#f0883e"   # 警告色（橙色）
-ACCENT_ERROR = "#f85149"     # 错误色（红色）
-ACCENT_PURPLE = "#a371f7"    # 紫色
+ACCENT_ERROR = "#d73b49"     # 错误色（红色）
+ACCENT_PURPLE = "#af5cf3"    # 紫色
 
 # 文字色
-TEXT_PRIMARY = "#e6edf3"     # 主文字
-TEXT_SECONDARY = "#8b949e"   # 次要文字
-TEXT_MUTED = "#6e7681"       # 最淡文字
+TEXT_PRIMARY = "#1d1d1f"     # 主文字 - Apple 近黑
+TEXT_SECONDARY = "#6e6e73"   # 次要文字 - 中等灰
+TEXT_MUTED = "#86868b"       # 最淡文字 - 浅灰
 
 # 边框
-BORDER_SUBTLE = "#30363d"
-BORDER_MEDIUM = "#484f58"
+BORDER_SUBTLE = "#d2d2d7"   # 微妙边框
+BORDER_MEDIUM = "#86868b"   # 中等边框
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 样式表组件
@@ -63,12 +63,12 @@ QScrollArea, QScrollArea > QWidget > QWidget {{
 """
 
 BUTTONS = f"""
-/* 主要按钮 */
+/* 主要按钮 - 药丸形状 */
 QPushButton {{
     background-color: {BG_INPUT};
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 6px;
+    border-radius: 980px;
     padding: 8px 16px;
     font-weight: 500;
     min-width: 80px;
@@ -80,7 +80,7 @@ QPushButton:hover {{
 }}
 
 QPushButton:pressed {{
-    background-color: #1a4a5a;
+    background-color: {BORDER_SUBTLE};
 }}
 
 QPushButton:disabled {{
@@ -88,17 +88,17 @@ QPushButton:disabled {{
     color: {TEXT_MUTED};
 }}
 
-/* 强调按钮 */
+/* 强调按钮 - Apple Blue */
 QPushButton#accent {{
-    background-color: #0d5a6a;
+    background-color: {ACCENT_PRIMARY};
     color: #ffffff;
-    border: 1px solid #0d6a7a;
+    border: 1px solid {ACCENT_PRIMARY};
     font-weight: 600;
 }}
 
 QPushButton#accent:hover {{
-    background-color: #0d6a7a;
-    border-color: {ACCENT_PRIMARY};
+    background-color: #0077ed;
+    border-color: #0077ed;
 }}
 """
 
@@ -108,10 +108,10 @@ QLineEdit {{
     background-color: {BG_INPUT};
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 4px;
+    border-radius: 8px;
     padding: 6px 10px;
     selection-background-color: {ACCENT_PRIMARY};
-    selection-color: {BG_BASE};
+    selection-color: #ffffff;
 }}
 
 QLineEdit:hover {{
@@ -136,7 +136,7 @@ QComboBox {{
     background-color: {BG_INPUT};
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 4px;
+    border-radius: 8px;
     padding: 6px 10px;
     min-width: 80px;
 }}
@@ -162,9 +162,9 @@ QComboBox QAbstractItemView {{
     background-color: {BG_CARD};
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER_MEDIUM};
-    border-radius: 4px;
-    selection-background-color: #0d5a6a;
-    selection-color: {TEXT_PRIMARY};
+    border-radius: 8px;
+    selection-background-color: {ACCENT_PRIMARY};
+    selection-color: #ffffff;
 }}
 """
 
@@ -173,7 +173,7 @@ GROUP_BOX = f"""
 QGroupBox {{
     background-color: {BG_CARD};
     border: 1px solid {BORDER_SUBTLE};
-    border-radius: 8px;
+    border-radius: 12px;
     margin-top: 14px;
     padding: 16px 12px 12px 12px;
     font-weight: 500;
@@ -212,7 +212,7 @@ QRadioButton::indicator:hover {{
 
 QRadioButton::indicator:checked {{
     border-color: {ACCENT_PRIMARY};
-    background-color: {BG_BASE};
+    background-color: {ACCENT_PRIMARY};
     border-width: 5px;
 }}
 
@@ -250,13 +250,13 @@ QScrollBar:vertical {{
 }}
 
 QScrollBar::handle:vertical {{
-    background-color: {BG_INPUT};
+    background-color: {BORDER_MEDIUM};
     border-radius: 4px;
     min-height: 30px;
 }}
 
 QScrollBar::handle:vertical:hover {{
-    background-color: {BORDER_MEDIUM};
+    background-color: {TEXT_MUTED};
 }}
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
@@ -270,13 +270,13 @@ QScrollBar:horizontal {{
 }}
 
 QScrollBar::handle:horizontal {{
-    background-color: {BG_INPUT};
+    background-color: {BORDER_MEDIUM};
     border-radius: 4px;
     min-width: 30px;
 }}
 
 QScrollBar::handle:horizontal:hover {{
-    background-color: {BORDER_MEDIUM};
+    background-color: {TEXT_MUTED};
 }}
 
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
@@ -310,7 +310,7 @@ QToolTip {{
     background-color: {BG_CARD};
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER_MEDIUM};
-    border-radius: 4px;
+    border-radius: 8px;
     padding: 6px 10px;
     font-size: 12px;
 }}
@@ -384,7 +384,7 @@ def group_box_style(accent_color: str) -> str:
         QGroupBox {{
             background-color: {BG_CARD};
             border: 1px solid {accent_color};
-            border-radius: 8px;
+            border-radius: 12px;
             margin-top: 14px;
             padding: 16px 12px 12px 12px;
             font-weight: 500;
