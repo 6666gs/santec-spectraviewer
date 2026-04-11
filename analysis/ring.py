@@ -493,69 +493,111 @@ class Ring:
         return fig
 
     def _plot_q_summary(self, fit_results, peaks, figinsert):
-        """绘制 Q 因子汇总图。"""
-        def sigma_filter(arr: np.ndarray) -> np.ndarray:
-            if arr.size == 0:
-                return arr
+        """绘制参数趋势图 + 结果汇总表格（期刊风格）。"""
+        def sigma_filter(arr):
             if arr.size <= 2:
-                return arr
+                return arr, np.ones(arr.size, dtype=bool)
             m = np.mean(arr)
             s = np.std(arr)
             if s == 0:
-                return arr
-            return arr[np.abs(arr - m) < 4 * s]
+                return arr, np.ones(arr.size, dtype=bool)
+            mask = np.abs(arr - m) < 4 * s
+            return arr[mask], mask
 
-        Ql_filtered = sigma_filter(
-            np.array([r['Ql'] for r in fit_results if np.isfinite(r['Ql']) and r['Ql'] > 0])
-        )
-        Qi_filtered = sigma_filter(
-            np.array([r['Qi'] for r in fit_results if np.isfinite(r['Qi']) and r['Qi'] > 0])
-        )
+        # 收集数据
+        lambda0_all = np.array([r['lambda0'] for r in fit_results])
+        Ql_all = np.array([r['Ql'] for r in fit_results])
+        Qi_all = np.array([r['Qi'] for r in fit_results])
 
-        kappa2_all = np.array(
-            [r['kappa2'] for r in fit_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
-        )
-        lambda0_all = np.array(
-            [r['lambda0'] for r in fit_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
-        )
-        kappa2_filtered = sigma_filter(kappa2_all)
-        if kappa2_filtered.size > 0:
-            kappa_mask = np.isin(kappa2_all, kappa2_filtered)
-            lambda0_filtered = lambda0_all[kappa_mask]
-        else:
-            lambda0_filtered = np.array([])
+        Ql_valid_mask = np.isfinite(Ql_all) & (Ql_all > 0)
+        Qi_valid_mask = np.isfinite(Qi_all) & (Qi_all > 0)
+        valid_mask = Ql_valid_mask & Qi_valid_mask
+
+        Ql_f, _ = sigma_filter(Ql_all[valid_mask])
+        Qi_f, _ = sigma_filter(Qi_all[valid_mask])
+        lam_f = lambda0_all[valid_mask]
 
         if figinsert is None:
-            fig, axes = _plt_ready(3, 3, figsize=(8, 10))
+            fig, (ax_trend, ax_table) = plt.subplots(
+                1, 2, figsize=(12, 5),
+                gridspec_kw={'width_ratios': [3, 2]})
         else:
             fig = figinsert
-            axes = fig.subplots(1, 3)
-            axes = axes.ravel() if isinstance(axes, np.ndarray) else [axes]
+            axes = fig.subplots(1, 2)
+            ax_trend, ax_table = axes[0], axes[1]
 
-        ax1, ax2, ax3 = axes[:3]
+        # ── 左面板：参数趋势图 ──
+        ax_trend.plot(lam_f, Ql_f, 'o-', color=_JC['Ql'], markersize=4,
+                       linewidth=0.8, label='$Q_L$')
+        ax_trend.plot(lam_f, Qi_f, 's-', color=_JC['Qi'], markersize=4,
+                       linewidth=0.8, label='$Q_i$')
+        _apply_journal_style(ax_trend, xlabel='Wavelength (nm)',
+                              ylabel='Q-factor')
+        ax_trend.legend(fontsize=9, frameon=False, loc='best')
 
-        ax1.hist(Ql_filtered, bins=20, color='mediumseagreen', edgecolor='black')
-        ax1.set_title('Loaded Q-factor Distribution')
-        ax1.set_xlabel('Ql')
-        ax1.set_ylabel('Count')
-        ax1.grid(True)
+        # ── 右面板：结果汇总表格 ──
+        ax_table.axis('off')
 
-        ax2.hist(Qi_filtered, bins=20, color='steelblue', edgecolor='black')
-        ax2.set_title('Intrinsic Q-factor Distribution')
-        ax2.set_xlabel('Qi')
-        ax2.set_ylabel('Count')
-        ax2.grid(True)
+        # 按波长排序
+        sort_idx = np.argsort(lambda0_all)
+        sorted_results = [fit_results[i] for i in sort_idx]
 
-        ax3.plot(lambda0_filtered, kappa2_filtered, 'bo--', markerfacecolor='none', label='kappa2')
-        ax3.set_xlabel('Resonance Wavelength (nm)')
-        ax3.set_ylabel('Coupling Coefficient (kappa^2)')
-        ax3_1 = ax3.twinx()
-        ax3_1.plot(self.lamda, self.T, 'g-', alpha=0.3)
-        ax3_1.plot(self.lambda0, self.T[peaks], 'go')
-        ax3_1.set_ylabel('Transmission Spectrum (dB)')
-        ax3.set_title('Coupling Coefficient')
-        ax3.grid(True)
-        ax3.legend()
+        col_labels = ['Peak', 'λ₀ (nm)', '$Q_L$', '$Q_i$',
+                       'ER (dB)', 'γ (pm)', '$R^2$']
+        cell_text = []
+        for idx, r in enumerate(sorted_results, 1):
+            er_db = -10 * np.log10(max(1 - r['params'][1], 1e-12))
+            gamma_pm = r['gamma'] * 1e3
+            cell_text.append([
+                f'{idx}',
+                f'{r["lambda0"]:.3f}',
+                f'{r["Ql"]:.0f}',
+                f'{r["Qi"]:.0f}',
+                f'{er_db:.1f}',
+                f'{gamma_pm:.2f}',
+                f'{r["r_squared"]:.4f}',
+            ])
+
+        # 添加均值行
+        if Ql_f.size > 0:
+            cell_text.append([
+                'Mean±SD',
+                '',
+                f'{np.mean(Ql_f):.0f}±{np.std(Ql_f):.0f}',
+                f'{np.mean(Qi_f):.0f}±{np.std(Qi_f):.0f}',
+                '', '', '',
+            ])
+
+        table = ax_table.table(
+            cellText=cell_text,
+            colLabels=col_labels,
+            cellLoc='center',
+            loc='center',
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(8)
+
+        # 表头样式
+        for j in range(len(col_labels)):
+            cell = table[0, j]
+            cell.set_text_props(fontweight='bold', fontfamily='serif')
+            cell.set_facecolor('#f0f0f0')
+            cell.set_edgecolor('#333333')
+            cell.set_linewidth(0.5)
+
+        # 数据行样式
+        for i in range(1, len(cell_text) + 1):
+            for j in range(len(col_labels)):
+                cell = table[i, j]
+                cell.set_text_props(fontfamily='serif')
+                cell.set_edgecolor('#999999')
+                cell.set_linewidth(0.3)
+            # 均值行底色
+            if i == len(cell_text):
+                for j in range(len(col_labels)):
+                    table[i, j].set_facecolor('#f8f8f8')
+
+        table.scale(1, 1.4)
 
         fig.tight_layout()
         fig.canvas.draw_idle()
