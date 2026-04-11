@@ -445,7 +445,7 @@ class Ring:
         return self._plot_q_summary(fit_results, peaks, figinsert)
 
     def _plot_single_peak_fit(self, lambda_slice, T_slice_db, result):
-        """绘制单峰拟合图。"""
+        """绘制单峰拟合图（期刊风格）。"""
         T_slice_linear = 10 ** (T_slice_db / 10)
         T0, ER, lambda0, gamma_half, slope = result['params']
         gamma = result['gamma']
@@ -453,41 +453,52 @@ class Ring:
         Qi = result['Qi']
         r_squared = result['r_squared']
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(8, 5))
         baseline_slice = np.maximum(T0 + slope * (lambda_slice - lambda0), 1e-12)
         T_norm = T_slice_linear / baseline_slice
 
-        ax.plot(lambda_slice, T_norm, 'o', markersize=5, alpha=0.6, color='blue', label='实验数据')
+        # 实验数据
+        ax.plot(lambda_slice, T_norm, 'o', markersize=3, alpha=0.6,
+                color=_JC['curve'], label='Experiment')
 
+        # 拟合曲线
         lambda_dense = np.linspace(lambda_slice[0], lambda_slice[-1], 500)
         T_fit_dense_raw = lorentzian_with_slope(lambda_dense, *result['params'])
         baseline_dense = np.maximum(T0 + slope * (lambda_dense - lambda0), 1e-12)
         T_fit_dense = T_fit_dense_raw / baseline_dense
-        ax.plot(lambda_dense, T_fit_dense, '-', linewidth=2, color='red', alpha=0.8, label='洛伦兹拟合')
+        ax.plot(lambda_dense, T_fit_dense, '--', linewidth=0.8,
+                color=_JC['fit'], label='Lorentzian fit')
 
-        ax.axvline(lambda0, color='green', linestyle='--', linewidth=1.5, alpha=0.7, label='中心波长')
-        ax.axvline(lambda0 - gamma / 2, color='orange', linestyle=':', linewidth=1.5, alpha=0.7)
-        ax.axvline(lambda0 + gamma / 2, color='orange', linestyle=':', linewidth=1.5, alpha=0.7, label='3dB带宽')
+        # 中心波长线
+        ax.axvline(lambda0, color=_JC['center'], linestyle=':',
+                    linewidth=0.8, alpha=0.8, label=f'λ₀ = {lambda0:.3f} nm')
 
+        # 3dB 带宽线
+        ax.axvline(lambda0 - gamma / 2, color=_JC['bw'], linestyle='--',
+                    linewidth=0.6, alpha=0.7)
+        ax.axvline(lambda0 + gamma / 2, color=_JC['bw'], linestyle='--',
+                    linewidth=0.6, alpha=0.7, label=f'3dB BW = {gamma*1e3:.2f} pm')
+
+        # 标注文字
+        er_db = -10 * np.log10(max(1 - ER, 1e-12))
         info_text = (
-            f'中心波长: {lambda0:.4f} nm\n'
-            f'3dB带宽: {gamma*1000:.3f} pm\n'
-            f'负载Q (Ql): {Ql:.0f}\n'
-            f'本征Q (Qi): {Qi:.0f}\n'
-            f'Qi/Ql: {Qi/Ql:.2f}\n'
-            f'消光比: {ER:.3f}\n'
-            f'R^2: {r_squared:.4f}'
+            f'$Q_L$ = {Ql:.0f}\n'
+            f'$Q_i$ = {Qi:.0f}\n'
+            f'$Q_i/Q_L$ = {Qi / Ql:.2f}\n'
+            f'ER = {er_db:.1f} dB\n'
+            f'$R^2$ = {r_squared:.4f}'
         )
         ax.text(
-            0.98, 0.97, info_text, transform=ax.transAxes, fontsize=11,
-            verticalalignment='top', horizontalalignment='right',
-            bbox=dict(boxstyle='round,pad=0.8', facecolor='wheat', alpha=0.8, edgecolor='black', linewidth=1.5),
+            0.97, 0.95, info_text, transform=ax.transAxes,
+            fontsize=8, verticalalignment='top', horizontalalignment='right',
+            fontfamily='serif',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
+                      edgecolor='#cccccc', linewidth=0.5),
         )
-        ax.set_xlabel('波长 (nm)', fontsize=12)
-        ax.set_ylabel('归一化透射率', fontsize=12)
-        ax.set_title(f'峰 @ {lambda0:.3f} nm - 洛伦兹拟合 (R^2={r_squared:.4f})', fontsize=14, fontweight='bold')
-        ax.legend(loc='upper left', fontsize=10)
-        ax.grid(True, alpha=0.3, linestyle='--')
+
+        _apply_journal_style(ax, xlabel='Wavelength (nm)',
+                              ylabel='Normalized Transmission')
+        ax.legend(fontsize=8, frameon=False, loc='upper left')
         ax.set_ylim((0, 1.1))
         fig.tight_layout()
         return fig
