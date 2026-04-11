@@ -152,13 +152,18 @@ class Ring:
         fre_grid = c / (lam_grid * NM_TO_M) / THZ
         return {'lam': lam_grid, 'fre': fre_grid, 'T': T_grid}
 
-    def cal_fsr(self, range_nm=None, display=True, figinsert=None):
+    def cal_fsr(self, range_nm=None, display=True, figinsert=None,
+                height_threshold=None, min_distance=None):
         """计算自由光谱范围 (FSR)。
 
         Args:
             range_nm: 波长范围 (start, end) nm
             display: 是否显示结果图
             figinsert: 外部图窗
+            height_threshold: 峰值高度阈值，用于 find_peaks 的 height 参数。
+                              默认 None 表示不限制。
+            min_distance: 峰之间的最小距离（数据点数），用于 find_peaks 的
+                          distance 参数。默认 None 表示自动推断。
 
         Returns:
             matplotlib Figure 或 None
@@ -177,16 +182,30 @@ class Ring:
 
         detect_signal = -T
         step_size = float(np.mean(np.diff(lamda)))
-        base_distance = max(1, int(len(lamda) / 200))
+
+        # 距离参数：用户指定 or 自动推断
+        if min_distance and min_distance > 0:
+            base_distance = max(1, int(min_distance))
+        else:
+            base_distance = max(1, int(len(lamda) / 200))
+
+        # prominence 参数：保持自动推断
         peak_prominence = max(0.5, float(np.ptp(detect_signal)) * 0.05)
 
-        peaks, _ = find_peaks(detect_signal, distance=base_distance, prominence=peak_prominence)
+        # height 参数：用户指定 or 不限
+        find_kw = dict(distance=base_distance, prominence=peak_prominence)
+        if height_threshold is not None:
+            find_kw['height'] = float(height_threshold)
+
+        peaks, _ = find_peaks(detect_signal, **find_kw)
         if peaks.size < 3:
-            peaks, _ = find_peaks(
-                detect_signal,
+            relax_kw = dict(
                 distance=max(1, int(base_distance / 2)),
                 prominence=max(0.2, peak_prominence * 0.5),
             )
+            if height_threshold is not None:
+                relax_kw['height'] = float(height_threshold)
+            peaks, _ = find_peaks(detect_signal, **relax_kw)
         if peaks.size < 2:
             raise ValueError("自动寻峰失败，峰数量不足以估计 FSR。")
 
