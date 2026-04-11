@@ -247,52 +247,89 @@ class Ring:
         fsr_fre = np.abs(np.diff(fre_peaks))
 
         if display:
-            if figinsert is None:
-                fig, axes = _plt_ready(4, 2, figsize=(8, 6))
-            else:
-                fig = figinsert
-                axes = fig.subplots(2, 2)
-                axes = axes.ravel() if isinstance(axes, np.ndarray) else [axes]
-
-            ax1, ax2, ax3, ax4 = axes
-            ax1.plot(lambda_peaks[:-1], fsr_lambda_all, 'o-')
-            ax1.set_xlabel('Wavelength (nm)')
-            ax1.set_ylabel('FSR (nm)')
-            ax1.set_title('Free Spectral Range vs Wavelength')
-            ax1.grid(True)
-
-            if fre_peaks.size > 0:
-                ax2.plot(fre_peaks[:-1], fsr_fre, 'o-')
-            ax2.set_xlabel('Frequency (THz)')
-            ax2.set_ylabel('FSR (THz)')
-            ax2.set_title('Free Spectral Range vs Frequency')
-            ax2.grid(True)
-
-            ax3.plot(lamda, T, label='Transmission Spectrum')
-            ax3.plot(lambda_peaks, T[peaks], 'ro', label='Resonance Peaks')
-            ax3.axhline(np.max(T), color='gray', linestyle='--', label='Max Transmission')
-            ax3.text(
-                np.max(lamda), np.max(T), f'{np.max(T):.2f}',
-                va='center', ha='left', color='gray', fontsize=12,
-                bbox=dict(facecolor='white', alpha=0.6, edgecolor='none'),
-            )
-            ax3.set_xlabel('Wavelength (nm)')
-            ax3.set_ylabel('dB')
-
-            if fre is not None:
-                ax4.plot(fre, T, label='Transmission Spectrum')
-                ax4.plot(fre_peaks, T[peaks], 'ro', label='Resonance Peaks')
-            ax4.set_xlabel('Frequency (THz)')
-            ax4.set_ylabel('dB')
-            ax4.axhline(np.max(T), color='gray', linestyle='--', label='Max Transmission')
-            ax4.text(
-                np.max(fre), np.max(T), f'{np.max(T):.2f}',
-                va='center', ha='left', color='gray', fontsize=12,
-                bbox=dict(facecolor='white', alpha=0.6, edgecolor='none'),
-            )
-            fig.tight_layout()
-            fig.canvas.draw_idle()
+            fig = self._plot_fsr_overview(lamda, fre, T, peaks, figinsert)
             return fig
+
+    def _plot_fsr_overview(self, lamda, fre, T, peaks, figinsert):
+        """绘制光谱总览图（期刊风格，单面板）。"""
+        lambda_peaks = lamda[peaks]
+
+        # ── 波长域总览 ──
+        if figinsert is None:
+            fig, ax = plt.subplots(figsize=(8, 4))
+        else:
+            fig = figinsert
+            ax = fig.subplots(1, 1)
+            if isinstance(ax, np.ndarray):
+                ax = ax.ravel()[0]
+
+        ax.plot(lamda, T, color=_JC['curve'], linewidth=0.8)
+
+        # 峰标记：倒三角 + 波长标注
+        for i, p in enumerate(peaks):
+            ax.plot(lamda[p], T[p], marker='v', color=_JC['peak'],
+                    markersize=6, zorder=5)
+            ax.annotate(
+                f'{lamda[p]:.2f}',
+                xy=(lamda[p], T[p]),
+                xytext=(0, -14), textcoords='offset points',
+                fontsize=7, color=_JC['peak'], ha='center', va='top',
+            )
+
+        # FSR 箭头：只标最多 3 个
+        if len(peaks) >= 2:
+            n_arrows = min(3, len(peaks) - 1)
+            indices = np.linspace(0, len(peaks) - 2, n_arrows, dtype=int)
+            for idx in indices:
+                x1, x2 = lamda[peaks[idx]], lamda[peaks[idx + 1]]
+                y_pos = T[peaks[idx]] - 0.05 * float(np.ptp(T))
+                ax.annotate(
+                    '', xy=(x2, y_pos), xytext=(x1, y_pos),
+                    arrowprops=dict(arrowstyle='<->', color=_JC['arrow'],
+                                    lw=0.6, shrinkA=2, shrinkB=2),
+                )
+                ax.text(
+                    0.5 * (x1 + x2), y_pos,
+                    f'{x2 - x1:.2f} nm',
+                    ha='center', va='top', fontsize=7, color=_JC['arrow'],
+                )
+
+        # 右上角 FSR 均值
+        ax.text(
+            0.97, 0.95,
+            f'FSR$_{{mean}}$ = {self.fsr_mean:.2f} nm',
+            transform=ax.transAxes, fontsize=9,
+            ha='right', va='top', fontfamily='serif',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                      edgecolor='#cccccc', linewidth=0.5),
+        )
+
+        _apply_journal_style(ax, xlabel='Wavelength (nm)', ylabel='Transmission (dB)')
+        fig.tight_layout()
+        fig.canvas.draw_idle()
+
+        # ── 频率域总览（第二张图） ──
+        if fre is not None and len(peaks) >= 2:
+            fig2, ax2 = plt.subplots(figsize=(8, 4))
+            fre_peaks = fre[peaks]
+            ax2.plot(fre, T, color=_JC['curve'], linewidth=0.8)
+            for p in peaks:
+                ax2.plot(fre[p], T[p], marker='v', color=_JC['peak'],
+                         markersize=6, zorder=5)
+            ax2.text(
+                0.97, 0.95,
+                f'FSR$_{{mean}}$ = {self.fsr_mean:.2f} nm',
+                transform=ax2.transAxes, fontsize=9,
+                ha='right', va='top', fontfamily='serif',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                          edgecolor='#cccccc', linewidth=0.5),
+            )
+            _apply_journal_style(ax2, xlabel='Frequency (THz)',
+                                 ylabel='Transmission (dB)')
+            fig2.tight_layout()
+            fig2.canvas.draw_idle()
+
+        return fig
 
     def cal_Q(self, holdon=False, max_holdon=10, figinsert=None):
         """计算 Q 因子。
