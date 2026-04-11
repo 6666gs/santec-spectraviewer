@@ -59,6 +59,34 @@ def _plt_ready(n: int = 1, cols: int = 2, figsize=(8, 5)):
     return fig, axs
 
 
+# 期刊风格颜色常量
+_JC = {
+    'curve':       '#000000',   # 光谱曲线 — 黑色
+    'fit':         '#c0392b',   # 拟合曲线 — 深红
+    'peak':        '#c0392b',   # 峰标记 — 深红
+    'arrow':       '#7f8c8d',   # FSR 箭头/辅助线 — 灰
+    'Ql':          '#2c3e50',   # Ql 数据点 — 深蓝
+    'Qi':          '#27ae60',   # Qi 数据点 — 深绿
+    'center':      '#2c3e50',   # 中心波长线 — 深蓝
+    'bw':          '#7f8c8d',   # 3dB 带宽线 — 灰
+}
+
+
+def _apply_journal_style(ax, xlabel='', ylabel='', title=''):
+    """为 Axes 应用顶级期刊视觉风格。"""
+    ax.set_xlabel(xlabel, fontsize=10, fontfamily='serif')
+    ax.set_ylabel(ylabel, fontsize=10, fontfamily='serif')
+    if title:
+        ax.set_title(title, fontsize=11, fontfamily='serif', fontweight='bold')
+    ax.tick_params(axis='both', which='major', labelsize=8, direction='in',
+                   top=True, right=True)
+    ax.tick_params(axis='both', which='minor', direction='in',
+                   top=True, right=True)
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.8)
+    ax.grid(False)
+
+
 class Ring:
     """微环谐振器分析类。
 
