@@ -59,21 +59,21 @@ def _plt_ready(n: int = 1, cols: int = 2, figsize=(8, 5)):
     return fig, axs
 
 
-# 期刊风格颜色常量
+# ── 期刊风格颜色常量 ──
 _JC = {
-    'curve':       '#000000',   # 光谱曲线 — 黑色
-    'fit':         '#c0392b',   # 拟合曲线 — 深红
-    'peak':        '#c0392b',   # 峰标记 — 深红
-    'arrow':       '#7f8c8d',   # FSR 箭头/辅助线 — 灰
-    'Ql':          '#2c3e50',   # Ql 数据点 — 深蓝
-    'Qi':          '#27ae60',   # Qi 数据点 — 深绿
-    'center':      '#2c3e50',   # 中心波长线 — 深蓝
-    'bw':          '#7f8c8d',   # 3dB 带宽线 — 灰
+    'curve':  '#000000',   # 光谱曲线
+    'fit':    '#c0392b',   # 拟合曲线
+    'peak':   '#c0392b',   # 峰标记
+    'arrow':  '#7f8c8d',   # 辅助线
+    'Ql':     '#2c3e50',   # Ql
+    'Qi':     '#27ae60',   # Qi
+    'center': '#2c3e50',   # 中心波长线
+    'bw':     '#7f8c8d',   # 3dB 带宽线
 }
 
 
 def _apply_journal_style(ax, xlabel='', ylabel='', title=''):
-    """为 Axes 应用顶级期刊视觉风格。"""
+    """为 Axes 应用期刊视觉风格。"""
     ax.set_xlabel(xlabel, fontsize=10, fontfamily='serif')
     ax.set_ylabel(ylabel, fontsize=10, fontfamily='serif')
     if title:
@@ -160,10 +160,8 @@ class Ring:
             range_nm: 波长范围 (start, end) nm
             display: 是否显示结果图
             figinsert: 外部图窗
-            height_threshold: 峰值高度阈值，用于 find_peaks 的 height 参数。
-                              默认 None 表示不限制。
-            min_distance: 峰之间的最小距离（数据点数），用于 find_peaks 的
-                          distance 参数。默认 None 表示自动推断。
+            height_threshold: 谷的最小深度阈值 (dB)，None 表示不限
+            min_distance: 峰间最小距离 (数据点数)，None/0 表示自动推断
 
         Returns:
             matplotlib Figure 或 None
@@ -189,7 +187,6 @@ class Ring:
         else:
             base_distance = max(1, int(len(lamda) / 200))
 
-        # prominence 参数：保持自动推断
         peak_prominence = max(0.5, float(np.ptp(detect_signal)) * 0.05)
 
         # height 参数：用户指定 or 不限
@@ -247,89 +244,42 @@ class Ring:
         fsr_fre = np.abs(np.diff(fre_peaks))
 
         if display:
-            fig = self._plot_fsr_overview(lamda, fre, T, peaks, figinsert)
+            if figinsert is None:
+                fig, axes = _plt_ready(4, 2, figsize=(8, 6))
+            else:
+                fig = figinsert
+                axes = fig.subplots(2, 2)
+                axes = axes.ravel() if isinstance(axes, np.ndarray) else [axes]
+
+            ax1, ax2, ax3, ax4 = axes
+            ax1.plot(lambda_peaks[:-1], fsr_lambda_all, 'o-', color=_JC['Ql'],
+                     markersize=4, linewidth=0.8)
+            _apply_journal_style(ax1, xlabel='Wavelength (nm)', ylabel='FSR (nm)',
+                                 title='Free Spectral Range vs Wavelength')
+
+            if fre_peaks.size > 0:
+                ax2.plot(fre_peaks[:-1], fsr_fre, 'o-', color=_JC['Qi'],
+                         markersize=4, linewidth=0.8)
+            _apply_journal_style(ax2, xlabel='Frequency (THz)', ylabel='FSR (THz)',
+                                 title='Free Spectral Range vs Frequency')
+
+            ax3.plot(lamda, T, color=_JC['curve'], linewidth=0.8, label='Transmission')
+            ax3.plot(lambda_peaks, T[peaks], 'o', color=_JC['peak'],
+                     markersize=5, label='Resonance Peaks')
+            ax3.axhline(np.max(T), color=_JC['arrow'], linestyle='--', linewidth=0.5)
+            _apply_journal_style(ax3, xlabel='Wavelength (nm)', ylabel='Transmission (dB)')
+            ax3.legend(fontsize=7, frameon=False)
+
+            if fre is not None:
+                ax4.plot(fre, T, color=_JC['curve'], linewidth=0.8, label='Transmission')
+                ax4.plot(fre_peaks, T[peaks], 'o', color=_JC['peak'],
+                         markersize=5, label='Resonance Peaks')
+            ax4.axhline(np.max(T), color=_JC['arrow'], linestyle='--', linewidth=0.5)
+            _apply_journal_style(ax4, xlabel='Frequency (THz)', ylabel='Transmission (dB)')
+            ax4.legend(fontsize=7, frameon=False)
+            fig.tight_layout()
+            fig.canvas.draw_idle()
             return fig
-
-    def _plot_fsr_overview(self, lamda, fre, T, peaks, figinsert):
-        """绘制光谱总览图（期刊风格，单面板）。"""
-        lambda_peaks = lamda[peaks]
-
-        # ── 波长域总览 ──
-        if figinsert is None:
-            fig, ax = plt.subplots(figsize=(8, 4))
-        else:
-            fig = figinsert
-            ax = fig.subplots(1, 1)
-            if isinstance(ax, np.ndarray):
-                ax = ax.ravel()[0]
-
-        ax.plot(lamda, T, color=_JC['curve'], linewidth=0.8)
-
-        # 峰标记：倒三角 + 波长标注
-        for i, p in enumerate(peaks):
-            ax.plot(lamda[p], T[p], marker='v', color=_JC['peak'],
-                    markersize=6, zorder=5)
-            ax.annotate(
-                f'{lamda[p]:.2f}',
-                xy=(lamda[p], T[p]),
-                xytext=(0, -14), textcoords='offset points',
-                fontsize=7, color=_JC['peak'], ha='center', va='top',
-            )
-
-        # FSR 箭头：只标最多 3 个
-        if len(peaks) >= 2:
-            n_arrows = min(3, len(peaks) - 1)
-            indices = np.linspace(0, len(peaks) - 2, n_arrows, dtype=int)
-            for idx in indices:
-                x1, x2 = lamda[peaks[idx]], lamda[peaks[idx + 1]]
-                y_pos = T[peaks[idx]] - 0.05 * float(np.ptp(T))
-                ax.annotate(
-                    '', xy=(x2, y_pos), xytext=(x1, y_pos),
-                    arrowprops=dict(arrowstyle='<->', color=_JC['arrow'],
-                                    lw=0.6, shrinkA=2, shrinkB=2),
-                )
-                ax.text(
-                    0.5 * (x1 + x2), y_pos,
-                    f'{x2 - x1:.2f} nm',
-                    ha='center', va='top', fontsize=7, color=_JC['arrow'],
-                )
-
-        # 右上角 FSR 均值
-        ax.text(
-            0.97, 0.95,
-            f'FSR$_{{mean}}$ = {self.fsr_mean:.2f} nm',
-            transform=ax.transAxes, fontsize=9,
-            ha='right', va='top', fontfamily='serif',
-            bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
-                      edgecolor='#cccccc', linewidth=0.5),
-        )
-
-        _apply_journal_style(ax, xlabel='Wavelength (nm)', ylabel='Transmission (dB)')
-        fig.tight_layout()
-        fig.canvas.draw_idle()
-
-        # ── 频率域总览（第二张图） ──
-        if fre is not None and len(peaks) >= 2:
-            fig2, ax2 = plt.subplots(figsize=(8, 4))
-            fre_peaks = fre[peaks]
-            ax2.plot(fre, T, color=_JC['curve'], linewidth=0.8)
-            for p in peaks:
-                ax2.plot(fre[p], T[p], marker='v', color=_JC['peak'],
-                         markersize=6, zorder=5)
-            ax2.text(
-                0.97, 0.95,
-                f'FSR$_{{mean}}$ = {self.fsr_mean:.2f} nm',
-                transform=ax2.transAxes, fontsize=9,
-                ha='right', va='top', fontfamily='serif',
-                bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
-                          edgecolor='#cccccc', linewidth=0.5),
-            )
-            _apply_journal_style(ax2, xlabel='Frequency (THz)',
-                                 ylabel='Transmission (dB)')
-            fig2.tight_layout()
-            fig2.canvas.draw_idle()
-
-        return fig
 
     def cal_Q(self, holdon=False, max_holdon=10, figinsert=None):
         """计算 Q 因子。
@@ -445,7 +395,7 @@ class Ring:
         return self._plot_q_summary(fit_results, peaks, figinsert)
 
     def _plot_single_peak_fit(self, lambda_slice, T_slice_db, result):
-        """绘制单峰拟合图（期刊风格）。"""
+        """绘制单峰拟合图。"""
         T_slice_linear = 10 ** (T_slice_db / 10)
         T0, ER, lambda0, gamma_half, slope = result['params']
         gamma = result['gamma']
@@ -457,158 +407,111 @@ class Ring:
         baseline_slice = np.maximum(T0 + slope * (lambda_slice - lambda0), 1e-12)
         T_norm = T_slice_linear / baseline_slice
 
-        # 实验数据
         ax.plot(lambda_slice, T_norm, 'o', markersize=3, alpha=0.6,
-                color=_JC['curve'], label='Experiment')
+                color=_JC['curve'], label='实验数据')
 
-        # 拟合曲线
         lambda_dense = np.linspace(lambda_slice[0], lambda_slice[-1], 500)
         T_fit_dense_raw = lorentzian_with_slope(lambda_dense, *result['params'])
         baseline_dense = np.maximum(T0 + slope * (lambda_dense - lambda0), 1e-12)
         T_fit_dense = T_fit_dense_raw / baseline_dense
         ax.plot(lambda_dense, T_fit_dense, '--', linewidth=0.8,
-                color=_JC['fit'], label='Lorentzian fit')
+                color=_JC['fit'], label='洛伦兹拟合')
 
-        # 中心波长线
         ax.axvline(lambda0, color=_JC['center'], linestyle=':',
-                    linewidth=0.8, alpha=0.8, label=f'λ₀ = {lambda0:.3f} nm')
-
-        # 3dB 带宽线
+                    linewidth=0.8, alpha=0.8, label='中心波长')
         ax.axvline(lambda0 - gamma / 2, color=_JC['bw'], linestyle='--',
                     linewidth=0.6, alpha=0.7)
         ax.axvline(lambda0 + gamma / 2, color=_JC['bw'], linestyle='--',
-                    linewidth=0.6, alpha=0.7, label=f'3dB BW = {gamma*1e3:.2f} pm')
+                    linewidth=0.6, alpha=0.7, label='3dB带宽')
 
-        # 标注文字
-        er_db = -10 * np.log10(max(1 - ER, 1e-12))
         info_text = (
-            f'$Q_L$ = {Ql:.0f}\n'
-            f'$Q_i$ = {Qi:.0f}\n'
-            f'$Q_i/Q_L$ = {Qi / Ql:.2f}\n'
-            f'ER = {er_db:.1f} dB\n'
-            f'$R^2$ = {r_squared:.4f}'
+            f'中心波长: {lambda0:.4f} nm\n'
+            f'3dB带宽: {gamma*1000:.3f} pm\n'
+            f'负载Q (Ql): {Ql:.0f}\n'
+            f'本征Q (Qi): {Qi:.0f}\n'
+            f'Qi/Ql: {Qi/Ql:.2f}\n'
+            f'消光比: {ER:.3f}\n'
+            f'R²: {r_squared:.4f}'
         )
         ax.text(
-            0.97, 0.95, info_text, transform=ax.transAxes,
-            fontsize=8, verticalalignment='top', horizontalalignment='right',
+            0.97, 0.95, info_text, transform=ax.transAxes, fontsize=8,
+            verticalalignment='top', horizontalalignment='right',
             fontfamily='serif',
             bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
                       edgecolor='#cccccc', linewidth=0.5),
         )
-
-        _apply_journal_style(ax, xlabel='Wavelength (nm)',
-                              ylabel='Normalized Transmission')
+        _apply_journal_style(ax, xlabel='波长 (nm)', ylabel='归一化透射率',
+                             title=f'峰 @ {lambda0:.3f} nm — 洛伦兹拟合 (R²={r_squared:.4f})')
         ax.legend(fontsize=8, frameon=False, loc='upper left')
         ax.set_ylim((0, 1.1))
         fig.tight_layout()
         return fig
 
     def _plot_q_summary(self, fit_results, peaks, figinsert):
-        """绘制参数趋势图 + 结果汇总表格（期刊风格）。"""
-        def sigma_filter(arr):
+        """绘制 Q 因子汇总图。"""
+        def sigma_filter(arr: np.ndarray) -> np.ndarray:
+            if arr.size == 0:
+                return arr
             if arr.size <= 2:
-                return arr, np.ones(arr.size, dtype=bool)
+                return arr
             m = np.mean(arr)
             s = np.std(arr)
             if s == 0:
-                return arr, np.ones(arr.size, dtype=bool)
-            mask = np.abs(arr - m) < 4 * s
-            return arr[mask], mask
+                return arr
+            return arr[np.abs(arr - m) < 4 * s]
 
-        # 收集数据
-        lambda0_all = np.array([r['lambda0'] for r in fit_results])
-        Ql_all = np.array([r['Ql'] for r in fit_results])
-        Qi_all = np.array([r['Qi'] for r in fit_results])
+        Ql_filtered = sigma_filter(
+            np.array([r['Ql'] for r in fit_results if np.isfinite(r['Ql']) and r['Ql'] > 0])
+        )
+        Qi_filtered = sigma_filter(
+            np.array([r['Qi'] for r in fit_results if np.isfinite(r['Qi']) and r['Qi'] > 0])
+        )
 
-        Ql_valid_mask = np.isfinite(Ql_all) & (Ql_all > 0)
-        Qi_valid_mask = np.isfinite(Qi_all) & (Qi_all > 0)
-        valid_mask = Ql_valid_mask & Qi_valid_mask
-
-        Ql_f, _ = sigma_filter(Ql_all[valid_mask])
-        Qi_f, _ = sigma_filter(Qi_all[valid_mask])
-        lam_f = lambda0_all[valid_mask]
+        kappa2_all = np.array(
+            [r['kappa2'] for r in fit_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
+        )
+        lambda0_all = np.array(
+            [r['lambda0'] for r in fit_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
+        )
+        kappa2_filtered = sigma_filter(kappa2_all)
+        if kappa2_filtered.size > 0:
+            kappa_mask = np.isin(kappa2_all, kappa2_filtered)
+            lambda0_filtered = lambda0_all[kappa_mask]
+        else:
+            lambda0_filtered = np.array([])
 
         if figinsert is None:
-            fig, (ax_trend, ax_table) = plt.subplots(
-                1, 2, figsize=(12, 5),
-                gridspec_kw={'width_ratios': [3, 2]})
+            fig, axes = _plt_ready(3, 3, figsize=(8, 10))
         else:
             fig = figinsert
-            axes = fig.subplots(1, 2)
-            ax_trend, ax_table = axes[0], axes[1]
+            axes = fig.subplots(1, 3)
+            axes = axes.ravel() if isinstance(axes, np.ndarray) else [axes]
 
-        # ── 左面板：参数趋势图 ──
-        ax_trend.plot(lam_f, Ql_f, 'o-', color=_JC['Ql'], markersize=4,
-                       linewidth=0.8, label='$Q_L$')
-        ax_trend.plot(lam_f, Qi_f, 's-', color=_JC['Qi'], markersize=4,
-                       linewidth=0.8, label='$Q_i$')
-        _apply_journal_style(ax_trend, xlabel='Wavelength (nm)',
-                              ylabel='Q-factor')
-        ax_trend.legend(fontsize=9, frameon=False, loc='best')
+        ax1, ax2, ax3 = axes[:3]
 
-        # ── 右面板：结果汇总表格 ──
-        ax_table.axis('off')
+        ax1.hist(Ql_filtered, bins=20, color=_JC['Ql'], edgecolor='white',
+                 linewidth=0.5, alpha=0.85)
+        _apply_journal_style(ax1, xlabel='$Q_L$', ylabel='Count',
+                             title='Loaded Q-factor Distribution')
 
-        # 按波长排序
-        sort_idx = np.argsort(lambda0_all)
-        sorted_results = [fit_results[i] for i in sort_idx]
+        ax2.hist(Qi_filtered, bins=20, color=_JC['Qi'], edgecolor='white',
+                 linewidth=0.5, alpha=0.85)
+        _apply_journal_style(ax2, xlabel='$Q_i$', ylabel='Count',
+                             title='Intrinsic Q-factor Distribution')
 
-        col_labels = ['Peak', 'λ₀ (nm)', '$Q_L$', '$Q_i$',
-                       'ER (dB)', 'γ (pm)', '$R^2$']
-        cell_text = []
-        for idx, r in enumerate(sorted_results, 1):
-            er_db = -10 * np.log10(max(1 - r['params'][1], 1e-12))
-            gamma_pm = r['gamma'] * 1e3
-            cell_text.append([
-                f'{idx}',
-                f'{r["lambda0"]:.3f}',
-                f'{r["Ql"]:.0f}',
-                f'{r["Qi"]:.0f}',
-                f'{er_db:.1f}',
-                f'{gamma_pm:.2f}',
-                f'{r["r_squared"]:.4f}',
-            ])
-
-        # 添加均值行
-        if Ql_f.size > 0:
-            cell_text.append([
-                'Mean±SD',
-                '',
-                f'{np.mean(Ql_f):.0f}±{np.std(Ql_f):.0f}',
-                f'{np.mean(Qi_f):.0f}±{np.std(Qi_f):.0f}',
-                '', '', '',
-            ])
-
-        table = ax_table.table(
-            cellText=cell_text,
-            colLabels=col_labels,
-            cellLoc='center',
-            loc='center',
-        )
-        table.auto_set_font_size(False)
-        table.set_fontsize(8)
-
-        # 表头样式
-        for j in range(len(col_labels)):
-            cell = table[0, j]
-            cell.set_text_props(fontweight='bold', fontfamily='serif')
-            cell.set_facecolor('#f0f0f0')
-            cell.set_edgecolor('#333333')
-            cell.set_linewidth(0.5)
-
-        # 数据行样式
-        for i in range(1, len(cell_text) + 1):
-            for j in range(len(col_labels)):
-                cell = table[i, j]
-                cell.set_text_props(fontfamily='serif')
-                cell.set_edgecolor('#999999')
-                cell.set_linewidth(0.3)
-            # 均值行底色
-            if i == len(cell_text):
-                for j in range(len(col_labels)):
-                    table[i, j].set_facecolor('#f8f8f8')
-
-        table.scale(1, 1.4)
+        ax3.plot(lambda0_filtered, kappa2_filtered, 'o--', color=_JC['Ql'],
+                 markersize=4, linewidth=0.8, markerfacecolor='none',
+                 label='$\\kappa^2$')
+        _apply_journal_style(ax3, xlabel='Resonance Wavelength (nm)',
+                             ylabel='Coupling Coefficient ($\\kappa^2$)',
+                             title='Coupling Coefficient')
+        ax3_1 = ax3.twinx()
+        ax3_1.plot(self.lamda, self.T, color=_JC['curve'], linewidth=0.5, alpha=0.3)
+        ax3_1.plot(self.lambda0, self.T[peaks], 'o', color=_JC['peak'], markersize=4)
+        ax3_1.set_ylabel('Transmission (dB)', fontsize=10, fontfamily='serif')
+        ax3_1.tick_params(axis='y', labelsize=8, direction='in')
+        ax3_1.spines['right'].set_linewidth(0.8)
+        ax3.legend(fontsize=8, frameon=False)
 
         fig.tight_layout()
         fig.canvas.draw_idle()
