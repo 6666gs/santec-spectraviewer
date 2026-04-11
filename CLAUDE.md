@@ -52,8 +52,9 @@ spectraviewer/
 ### analysis/ — 分析层
 
 - **`ring.py`**: `Ring` 类 — 微环谐振器分析
-  - `cal_fsr()` — FSR 计算
+  - `cal_fsr(height_threshold=None, min_distance=None)` — FSR 计算，支持阈值和间隔参数
   - `cal_Q()` — Q 因子拟合
+  - 图表采用期刊风格（`_apply_journal_style`），颜色常量 `_JC`
 - **`peak.py`**: `analyze_peaks()`, `calc_3db_bandwidth()` — 峰值分析
 - **`fitting.py`**: `lorentzian_with_slope()`, `fit_lorentzian_peak()` — 洛伦兹拟合
 
