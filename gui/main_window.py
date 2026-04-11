@@ -673,6 +673,16 @@ class MainWindow(QWidget):
         xrange_h.addWidget(self.ring_xmax)
         form.addRow('波长范围 (nm):', xrange_w)
 
+        # 阈值
+        self.ring_threshold = QLineEdit()
+        self.ring_threshold.setPlaceholderText('留空表示不限')
+        form.addRow('阈值 (dB):', self.ring_threshold)
+
+        # 最小间距
+        self.ring_distance = QLineEdit('0')
+        self.ring_distance.setPlaceholderText('0 表示自动')
+        form.addRow('最小间距:', self.ring_distance)
+
         vbox.addLayout(form)
 
         self.chk_ring_holdon = QCheckBox('显示单峰拟合（最多10个）')
@@ -1068,10 +1078,19 @@ class MainWindow(QWidget):
         xmax = _parse_float_edit(self.ring_xmax)
         range_nm = (xmin, xmax) if (xmin is not None and xmax is not None) else None
 
+        # 新增参数
+        height_threshold = _parse_float_edit(self.ring_threshold)
+        min_distance_val = _parse_float_edit(self.ring_distance)
+        min_distance = int(min_distance_val) if min_distance_val else None
+
         try:
             ring = Ring(x, y)
             print(f'\n微环分析（{source_desc}）...')
-            fig_fsr = ring.cal_fsr(range_nm=range_nm, display=True)
+            fig_fsr = ring.cal_fsr(
+                range_nm=range_nm, display=True,
+                height_threshold=height_threshold,
+                min_distance=min_distance,
+            )
             print(f'FSR 均值: {ring.fsr_mean:.4f} nm')
             holdon = self.chk_ring_holdon.isChecked()
             fig_q = ring.cal_Q(holdon=holdon, max_holdon=10)
@@ -1079,21 +1098,39 @@ class MainWindow(QWidget):
             self._style_popup(fig_q)
             plt.show(block=False)
             if hasattr(ring, 'fit_results') and ring.fit_results:
-                ql_vals = [
-                    r['Ql']
-                    for r in ring.fit_results
-                    if np.isfinite(r['Ql']) and r['Ql'] > 0
-                ]
-                qi_vals = [
-                    r['Qi']
-                    for r in ring.fit_results
-                    if np.isfinite(r['Qi']) and r['Qi'] > 0
-                ]
-                if ql_vals:
-                    print(
-                        f'Ql 均值: {np.mean(ql_vals):.0f}  (共 {len(ql_vals)} 个有效峰)'
-                    )
-                if qi_vals:
-                    print(f'Qi 均值: {np.mean(qi_vals):.0f}')
+                self._print_ring_results(ring)
         except Exception as e:
             print(f'微环分析失败: {e}')
+
+    def _print_ring_results(self, ring):
+        """以论文表格格式打印微环分析结果。"""
+        fr = ring.fit_results
+        sep = '─' * 55
+
+        # 按波长排序
+        fr_sorted = sorted(fr, key=lambda r: r['lambda0'])
+
+        print(sep)
+        print(f'FSR = {ring.fsr_mean:.4f} nm')
+        print(sep)
+        print(f'{"λ₀(nm)":>10}  {"Ql":>8}  {"Qi":>8}  {"ER(dB)":>7}  {"γ(pm)":>7}  {"R²":>6}')
+        print(sep)
+        for r in fr_sorted:
+            er_db = -10 * np.log10(max(1 - r['params'][1], 1e-12))
+            gamma_pm = r['gamma'] * 1e3
+            print(
+                f'{r["lambda0"]:10.3f}  '
+                f'{r["Ql"]:8.0f}  '
+                f'{r["Qi"]:8.0f}  '
+                f'{er_db:7.1f}  '
+                f'{gamma_pm:7.2f}  '
+                f'{r["r_squared"]:6.4f}'
+            )
+        print(sep)
+        ql_vals = [r['Ql'] for r in fr if np.isfinite(r['Ql']) and r['Ql'] > 0]
+        qi_vals = [r['Qi'] for r in fr if np.isfinite(r['Qi']) and r['Qi'] > 0]
+        if ql_vals:
+            print(f'均值 Ql = {np.mean(ql_vals):.0f} ± {np.std(ql_vals):.0f}')
+        if qi_vals:
+            print(f'均值 Qi = {np.mean(qi_vals):.0f} ± {np.std(qi_vals):.0f}')
+        print(sep)
