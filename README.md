@@ -1,70 +1,73 @@
 # SpectraViewer
 
-光谱数据可视化桌面工具，用于加载、浏览和分析 SANTEC 扫谱系统得到的 CSV 数据。
+SANTEC 光谱仪数据可视化与分析工具。
 
 ## 功能
 
-- **批量加载** — 自动识别 loss / raw 格式，支持多量程拼接
-- **表格浏览** — 显示器件名、端口、波长范围、步长等元数据
-- **交互绘图** — 双击或多选绘制光谱曲线
-- **公式计算** — 支持 `A0 - A1`、`A12 - A1 - (A2 - A1) * 2` 等表达式
-- **峰值/谷值分析** — 自动标注位置、数值和 3dB 带宽
-- **微环分析** — FSR 估计、Q 因子拟合、耦合系数提取
-- **现代化界面** — 暗色主题，卡片式布局，清晰的功能分区
+- CSV 光谱数据加载与可视化
+- 峰值/谷值检测与 3dB 带宽计算
+- 微环谐振器 FSR / Q 因子分析
+- 公式计算（多数据叠加运算）
+- 出版质量图像导出
 
-## 安装
+## 快速开始
+
+### Windows
 
 ```bash
 pip install -r requirements.txt
-```
-
-## 运行
-
-```bash
 python main.py
 ```
 
-## 项目结构
+### Linux / WSL
 
+```bash
+# 一键配置（安装 Qt 依赖 + Python 包 + 中文字体）
+bash setup_linux.sh
+
+# 启动
+python main.py
 ```
-spectraviewer/
-├── main.py              # 入口 (高 DPI + 主题配置)
-├── core/                # 数据处理 (CSV 读取、数据管理)
-├── analysis/            # 光子学分析 (微环、峰值、拟合)
-├── gui/                 # 图形界面 (PyQt5)
-│   ├── main_window.py   # 主窗口
-│   ├── styles.py        # 暗色主题样式
-│   └── widgets.py       # 通用组件
-└── visualization/       # 可视化 (matplotlib)
+
+WSL 环境下会自动使用 Windows 原生文件选择器，数据路径自动转换（如 `F:\data` → `/mnt/f/data`）。
+
+### macOS
+
+```bash
+pip install -r requirements.txt
+python main.py
 ```
 
 ## 依赖
 
-- Python 3.8+
-- PyQt5
-- matplotlib
-- numpy
-- scipy
-- pandas
+```
+numpy
+scipy
+pandas
+matplotlib
+PyQt5
+```
 
-## 界面设计
+## 目录结构
 
-采用 **Laboratory Precision** 设计理念：
-- 统一的深灰色背景，减少视觉疲劳
-- 青色主强调色，体现科学仪器感
-- 功能区域用不同颜色区分（紫色=公式、橙色=峰值、绿色=微环）
-- 弹窗绘图保持白色背景，便于直接复制分享
-
-## 文件格式
-
-支持 SANTEC CSV 格式（14 行头 + 数据列），自动识别三种命名：
-
-| 格式 | 示例 |
-|------|------|
-| 完整 | `chip_dev_no_port_1500_1630_step1pm_range2_source0dbm_loss.csv` |
-| 简短 | `chip_dev_no_port.csv` |
-| 自由 | 任意命名（元数据从文件头读取） |
-
-## License
-
-MIT
+```
+spectraviewer/
+├── main.py                 # 入口
+├── setup_linux.sh          # Linux/WSL 环境配置脚本
+├── requirements.txt
+├── core/                   # 数据层 (无 PyQt5 依赖)
+│   ├── io.py               # CSV 读取
+│   ├── manager.py          # SpectraManager
+│   ├── grid.py             # 网格/插值工具
+│   └── utils.py            # 通用工具
+├── analysis/               # 分析层 (无 PyQt5 依赖)
+│   ├── ring.py             # 微环谐振器分析
+│   ├── peak.py             # 峰值/谷值检测
+│   └── fitting.py          # 洛伦兹拟合
+├── gui/                    # GUI 层 (PyQt5)
+│   ├── main_window.py      # 主窗口
+│   ├── styles.py           # 主题样式
+│   └── widgets.py          # 通用组件
+└── visualization/          # 可视化 (matplotlib)
+    └── plotter.py          # 出版质量绑图
+```

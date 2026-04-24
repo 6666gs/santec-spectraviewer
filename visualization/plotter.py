@@ -1,9 +1,24 @@
 # visualization/plotter.py — 出版质量绑图
 """出版质量光谱绑图函数。"""
 
+import platform
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
+
+
+def _get_serif_font():
+    """根据平台返回衬线字体名称。"""
+    system = platform.system()
+    if system == 'Darwin':
+        return 'Times New Roman'
+    elif system == 'Windows':
+        return 'Times New Roman'
+    else:
+        return 'serif'
+
+
+_SERIF = _get_serif_font()
 
 
 def plot_publication(
@@ -57,10 +72,10 @@ def plot_publication(
         ax.plot(x, y, linestyle, color=color, linewidth=linewidth, label=label, zorder=1)
         if marker:
             ax.scatter(x, y, s=marker_size, color=color, zorder=2)
-    ax.set_xlabel(xlabel, fontsize=16, fontweight='bold', family='Times New Roman')
-    ax.set_ylabel(ylabel, fontsize=16, fontweight='bold', family='Times New Roman')
+    ax.set_xlabel(xlabel, fontsize=16, fontweight='bold', family=_SERIF)
+    ax.set_ylabel(ylabel, fontsize=16, fontweight='bold', family=_SERIF)
     if title:
-        ax.set_title(title, fontsize=18, fontweight='bold', family='Times New Roman')
+        ax.set_title(title, fontsize=18, fontweight='bold', family=_SERIF)
     if xlim:
         ax.set_xlim(xlim)
     if ylim:
@@ -75,13 +90,13 @@ def plot_publication(
     ax.minorticks_off()
     for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
         tick_label.set_fontweight('bold')
-        tick_label.set_fontname('Times New Roman')
+        tick_label.set_fontname(_SERIF)
     for spine in ax.spines.values():
         spine.set_linewidth(2)
         spine.set_zorder(10)
     if has_label:
         ax.legend(fontsize=12, frameon=False,
-                  prop={'family': 'Times New Roman', 'weight': 'bold'})
+                  prop={'family': _SERIF, 'weight': 'bold'})
     plt.tight_layout()
     if save_path:
         fig.savefig(save_path, dpi=dpi, bbox_inches='tight')

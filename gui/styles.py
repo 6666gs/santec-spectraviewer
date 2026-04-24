@@ -8,6 +8,22 @@
 - 药丸形按钮 (980px 圆角)
 """
 
+import platform
+
+
+def _get_css_font_family():
+    """根据平台返回 CSS font-family 字符串。"""
+    system = platform.system()
+    if system == 'Darwin':
+        return "'SF Pro Text', 'Helvetica Neue', 'PingFang SC', sans-serif"
+    elif system == 'Windows':
+        return "'Segoe UI', 'Microsoft YaHei', sans-serif"
+    else:
+        return "'Noto Sans', 'DejaVu Sans', 'sans-serif'"
+
+
+_CSS_FONT_FAMILY = _get_css_font_family()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 颜色定义 - Apple 亮色主题
 # ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +57,7 @@ BORDER_MEDIUM = "#86868b"   # 中等边框
 MAIN_WINDOW = f"""
 /* 全局样式 */
 * {{
-    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    font-family: {_CSS_FONT_FAMILY};
 }}
 
 /* 主窗口 */

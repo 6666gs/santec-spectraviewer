@@ -10,13 +10,7 @@ from core.grid import create_uniform_grid, sanitize_xy, interp_on_grid
 from core.utils import _infer_decimals_from_value
 from .fitting import lorentzian_with_slope, fit_lorentzian_peak
 
-# 配置 matplotlib 中文显示
-plt.rcParams['font.sans-serif'] = [
-    'SimHei',
-    'Microsoft YaHei',
-    'SimSun',
-    'Arial Unicode MS',
-]
+# matplotlib 中文字体由 main.py 统一配置，这里仅确保 unicode_minus 关闭
 plt.rcParams['axes.unicode_minus'] = False
 
 # 单位转换常数

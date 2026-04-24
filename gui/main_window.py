@@ -7,7 +7,9 @@
 - 现代化的卡片式布局
 """
 
+import os
 import re
+import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -88,6 +90,58 @@ QStatusBar QLabel {
     color: #333333;
 }
 """
+
+
+def _is_wsl():
+    """检测是否运行在 WSL 环境中。"""
+    try:
+        with open('/proc/version', 'r') as f:
+            return 'microsoft' in f.read().lower()
+    except Exception:
+        return False
+
+
+def _win_path_to_wsl(win_path):
+    """将 Windows 路径转换为 WSL 路径。"""
+    if not win_path:
+        return ''
+    path = win_path.replace('\\', '/')
+    for letter in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+        drive = f'{letter}:'
+        if path.startswith(drive):
+            return f'/mnt/{letter.lower()}{path[len(drive):]}'
+    return path
+
+
+def _windows_folder_dialog():
+    """调用 Windows 原生文件夹选择器，返回 WSL 路径。"""
+    result = subprocess.run(
+        ['powershell.exe', '-NoProfile', '-Command',
+         '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
+         'Add-Type -AssemblyName System.Windows.Forms; '
+         '$f = New-Object System.Windows.Forms.FolderBrowserDialog; '
+         'if ($f.ShowDialog() -eq "OK") { $f.SelectedPath }'],
+        capture_output=True, text=True, encoding='utf-8', errors='replace'
+    )
+    return _win_path_to_wsl(result.stdout.strip())
+
+
+def _windows_file_dialog(title='选择文件', filter='CSV 文件 (*.csv)'):
+    """调用 Windows 原生文件选择器，返回 WSL 路径。"""
+    result = subprocess.run(
+        ['powershell.exe', '-NoProfile', '-Command',
+         '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
+         'Add-Type -AssemblyName System.Windows.Forms; '
+         '$f = New-Object System.Windows.Forms.OpenFileDialog; '
+         f'$f.Title = "{title}"; '
+         f'$f.Filter = "{filter}|*.csv|All files (*.*)|*.*"; '
+         'if ($f.ShowDialog() -eq "OK") { $f.FileName }'],
+        capture_output=True, text=True, encoding='utf-8', errors='replace'
+    )
+    return _win_path_to_wsl(result.stdout.strip())
+
+
+_IS_WSL = _is_wsl()
 
 
 def _parse_float_edit(edit):
@@ -296,7 +350,7 @@ class MainWindow(QWidget):
                 border-bottom-left-radius: 8px;
                 border-bottom-right-radius: 8px;
                 selection-background-color: #0d4a5a;
-                selection-color: {C['text']};
+                selection-color: #ffffff;
                 outline: none;
             }}
             QTableWidget::item {{
@@ -763,9 +817,12 @@ class MainWindow(QWidget):
         pass
 
     def _on_select_ref(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, '选择 Reference 文件', '', 'CSV 文件 (*.csv)'
-        )
+        if _IS_WSL:
+            path = _windows_file_dialog('选择 Reference 文件', 'CSV 文件 (*.csv)')
+        else:
+            path, _ = QFileDialog.getOpenFileName(
+                self, '选择 Reference 文件', '', 'CSV 文件 (*.csv)'
+            )
         if path:
             self.ref_path = path
             short = path.split('/')[-1].split('\\')[-1]
@@ -790,7 +847,10 @@ class MainWindow(QWidget):
                         print(f'重新加载失败: {e}')
 
     def _on_select_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, '选择数据文件夹')
+        if _IS_WSL:
+            folder = _windows_folder_dialog()
+        else:
+            folder = QFileDialog.getExistingDirectory(self, '选择数据文件夹')
         if not folder:
             return
         short_path = folder
