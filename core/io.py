@@ -15,7 +15,7 @@ def read_santec_csv(
     data_type: str = 'auto',
     reference_path: str | None = None,
     skiprows: int = 14,
-) -> dict:
+) -> list[dict]:
     """读取单个 SANTEC CSV 文件。
 
     Args:
@@ -25,7 +25,7 @@ def read_santec_csv(
         skiprows: 跳过的文件头行数
 
     Returns:
-        包含 wavelength, loss, meta 等字段的字典
+        包含每个通道结果的字典列表
     """
     def _parse_file_header(path) -> dict:
         meta = {}
@@ -59,24 +59,54 @@ def read_santec_csv(
             return [int(c) for c in m.group(1) if c.isdigit()]
         return []
 
-    def _detect_columns(path, skip) -> tuple[str, int]:
+    def _detect_columns(path, skip) -> tuple[str, int, list[dict]]:
+        """Detect data type, scan count, and channel mapping from CSV header.
+
+        Returns:
+            (data_type, n_scans, channels)
+            channels: list of {'col_idx': int, 'name': str}
+        """
         try:
             with open(path, encoding='utf-8', errors='replace') as f:
                 for _ in range(skip):
                     f.readline()
                 header_line = f.readline()
-            cols = [c.strip().lower() for c in header_line.split(',') if c.strip()]
-            if any('il' in c for c in cols):
-                return 'loss', 1
-            if any('monitor' in c or 'raw' in c for c in cols):
-                n_raw = sum(1 for c in cols if 'raw' in c)
-                return 'raw', max(n_raw, 1)
+            cols = [c.strip() for c in header_line.split(',') if c.strip()]
+            cols_lower = [c.lower() for c in cols]
+
+            # Loss: match IL columns, extract CH info
+            il_indices = [i for i, c in enumerate(cols_lower) if 'il' in c]
+            if il_indices:
+                channels = []
+                for idx in il_indices:
+                    col_name = cols[idx]
+                    ch_match = re.search(r'CH(\d+)', col_name, re.IGNORECASE)
+                    ch_name = f'CH{ch_match.group(1)}' if ch_match else f'CH{len(channels)+1}'
+                    channels.append({'col_idx': idx, 'name': ch_name})
+                return 'loss', 1, channels
+
+            # Raw: match Raw columns, extract Ch info
+            raw_indices = [i for i, c in enumerate(cols_lower) if 'raw' in c]
+            n_raw = len(raw_indices)
+            if raw_indices or any('monitor' in c for c in cols_lower):
+                channels = []
+                for idx in raw_indices:
+                    col_name = cols[idx]
+                    ch_match = re.search(r'CH(\d+)', col_name, re.IGNORECASE)
+                    ch_name = f'CH{ch_match.group(1)}' if ch_match else f'CH{len(channels)+1}'
+                    channels.append({'col_idx': idx, 'name': ch_name})
+                if not channels:
+                    channels = [{'col_idx': min(2, len(cols)-1), 'name': ''}]
+                return 'raw', max(n_raw, 1), channels
+
+            # Fallback: single column
+            channels = [{'col_idx': 1, 'name': ''}]
             n_data_cols = len(cols) - 1
             if n_data_cols == 1:
-                return 'loss', 1
-            return 'raw', max(n_data_cols // 2, 1)
+                return 'loss', 1, channels
+            return 'raw', max(n_data_cols // 2, 1), channels
         except Exception:
-            return 'loss', 1
+            return 'loss', 1, [{'col_idx': 1, 'name': ''}]
 
     def _read_data(path, skip):
         df = pd.read_csv(path, skiprows=skip, header=None)
@@ -112,7 +142,7 @@ def read_santec_csv(
     filepath = Path(filepath)
     filename = filepath.name.lower()
     meta = _parse_file_header(filepath)
-    detected_type, n_scans = _detect_columns(filepath, skiprows)
+    detected_type, n_scans, channels = _detect_columns(filepath, skiprows)
 
     if data_type == 'auto':
         if 'loss' in filename:
@@ -122,46 +152,55 @@ def read_santec_csv(
         else:
             data_type = detected_type
 
-    result = {'data_type': data_type, 'ranges': [], 'threshold': [], 'meta': meta}
     df = _read_data(filepath, skiprows)
     wavelength = df.iloc[:, 0].to_numpy(dtype=float)
-    result['wavelength'] = wavelength
 
-    if data_type == 'loss':
-        result['loss'] = df.iloc[:, 1].to_numpy(dtype=float)
-        result['ranges'] = _parse_ranges_from_filename(filename)
-    else:
-        raw_scans = []
-        for i in range(n_scans):
-            raw_col_idx = 1 + n_scans + i
-            if raw_col_idx < len(df.columns):
-                raw_scans.append(df.iloc[:, raw_col_idx].to_numpy(dtype=float))
-        if not raw_scans:
-            raw_scans = [df.iloc[:, min(2, len(df.columns) - 1)].to_numpy(dtype=float)]
-        ranges = _parse_ranges_from_filename(filename)
-        if len(ranges) != len(raw_scans):
-            ranges = [2] if len(raw_scans) == 1 else _auto_assign_ranges(raw_scans)
-        result['ranges'] = ranges
-        stitched_raw, thresholds = _stitch_multi_range(raw_scans, ranges)
-        result['threshold'] = thresholds
-        if reference_path is not None:
-            _, ref_n_scans = _detect_columns(reference_path, skiprows)
-            ref_df = _read_data(reference_path, skiprows)
-            ref_wavelength = ref_df.iloc[:, 0].to_numpy(dtype=float)
-            ref_detected_type, _ = _detect_columns(reference_path, skiprows)
-            if ref_detected_type == 'raw':
-                ref_raw_col = 1 + ref_n_scans
-                ref_raw = ref_df.iloc[:, ref_raw_col if ref_raw_col < len(ref_df.columns) else 2].to_numpy(dtype=float)
-            else:
-                ref_raw = ref_df.iloc[:, 1].to_numpy(dtype=float)
-            if len(ref_raw) == len(stitched_raw) and np.allclose(ref_wavelength, wavelength, rtol=1e-6):
-                result['loss'] = stitched_raw - ref_raw
-            else:
-                result['loss'] = stitched_raw - np.interp(wavelength, ref_wavelength, ref_raw,
-                                                           left=ref_raw[0], right=ref_raw[-1])
+    results = []
+    for ch_info in channels:
+        ch_name = ch_info['name']
+        ch_col = ch_info['col_idx']
+        result = {
+            'data_type': data_type, 'ranges': [], 'threshold': [],
+            'meta': meta, 'wavelength': wavelength, 'channel': ch_name,
+        }
+
+        if data_type == 'loss':
+            result['loss'] = df.iloc[:, ch_col].to_numpy(dtype=float)
+            result['ranges'] = _parse_ranges_from_filename(filename)
         else:
-            result['loss'] = stitched_raw
-    return result
+            raw_scans = []
+            for i in range(n_scans):
+                raw_col_idx = ch_col + i
+                if raw_col_idx < len(df.columns):
+                    raw_scans.append(df.iloc[:, raw_col_idx].to_numpy(dtype=float))
+            if not raw_scans:
+                raw_scans = [df.iloc[:, min(2, len(df.columns) - 1)].to_numpy(dtype=float)]
+            ranges = _parse_ranges_from_filename(filename)
+            if len(ranges) != len(raw_scans):
+                ranges = [2] if len(raw_scans) == 1 else _auto_assign_ranges(raw_scans)
+            result['ranges'] = ranges
+            stitched_raw, thresholds = _stitch_multi_range(raw_scans, ranges)
+            result['threshold'] = thresholds
+            if reference_path is not None:
+                _, ref_n_scans, _ = _detect_columns(reference_path, skiprows)
+                ref_df = _read_data(reference_path, skiprows)
+                ref_wavelength = ref_df.iloc[:, 0].to_numpy(dtype=float)
+                ref_detected_type, _, _ = _detect_columns(reference_path, skiprows)
+                if ref_detected_type == 'raw':
+                    ref_raw_col = 1 + ref_n_scans
+                    ref_raw = ref_df.iloc[:, ref_raw_col if ref_raw_col < len(ref_df.columns) else 2].to_numpy(dtype=float)
+                else:
+                    ref_raw = ref_df.iloc[:, 1].to_numpy(dtype=float)
+                if len(ref_raw) == len(stitched_raw) and np.allclose(ref_wavelength, wavelength, rtol=1e-6):
+                    result['loss'] = stitched_raw - ref_raw
+                else:
+                    result['loss'] = stitched_raw - np.interp(wavelength, ref_wavelength, ref_raw,
+                                                               left=ref_raw[0], right=ref_raw[-1])
+            else:
+                result['loss'] = stitched_raw
+        results.append(result)
+
+    return results
 
 
 def read_csv_arrays(
@@ -251,19 +290,24 @@ def read_csv_arrays(
     for filepath in sorted(files):
         filename = os.path.basename(filepath)
         try:
-            result = read_santec_csv(filepath, data_type=data_type,
-                                     reference_path=reference_path, skiprows=skiprows)
+            results = read_santec_csv(filepath, data_type=data_type,
+                                      reference_path=reference_path, skiprows=skiprows)
             fn_meta = _parse_filename_meta(filename)
-            key = _build_key(fn_meta, result.get('meta', {}), result['data_type'])
-            if key in conflict_counter:
-                conflict_counter[key] += 1
-                unique_key = key.replace('_array', f'_{conflict_counter[key]}_array')
-            else:
-                conflict_counter[key] = 0
-                unique_key = key
-            data_dict[unique_key] = np.column_stack([result['wavelength'], result['loss']])
-            loaded_count += 1
-            print(f"已加载: {unique_key} ← {filename} (type={result['data_type']}, ranges={result['ranges']})")
+            for result in results:
+                key = _build_key(fn_meta, result.get('meta', {}), result['data_type'])
+                channel = result.get('channel', '')
+                if channel:
+                    key = key.replace('_array', f'_ch{channel}_array')
+                if key in conflict_counter:
+                    conflict_counter[key] += 1
+                    unique_key = key.replace('_array', f'_{conflict_counter[key]}_array')
+                else:
+                    conflict_counter[key] = 0
+                    unique_key = key
+                data_dict[unique_key] = np.column_stack([result['wavelength'], result['loss']])
+                loaded_count += 1
+                ch_info = f', ch={channel}' if channel else ''
+                print(f"已加载: {unique_key} ← {filename} (type={result['data_type']}, ranges={result['ranges']}{ch_info})")
         except Exception as e:
             print(f"错误: {filename} 读取失败 ({e})")
 

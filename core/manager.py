@@ -68,7 +68,7 @@ class SpectraManager:
             meta['index'] = idx
             rows.append(meta)
         table = pd.DataFrame(rows, columns=[
-            'index', 'key', 'device', 'device_no', 'port',
+            'index', 'key', 'device', 'device_no', 'port', 'channel',
             'start_nm', 'end_nm', 'step', 'range', 'source_dbm', 'data_type',
         ])
         return cls(data_dict, table, keys)
@@ -76,6 +76,12 @@ class SpectraManager:
     @staticmethod
     def _parse_var_key(var_key: str) -> dict:
         """解析数据键名，提取元数据。"""
+        # Extract channel suffix: _chCH1_array or _chCH2_array
+        channel = ''
+        ch_match = re.search(r'_ch(CH\d+)_array$', var_key)
+        if ch_match:
+            channel = ch_match.group(1)
+            var_key = var_key.replace(f'_ch{channel}', '')
         m = re.match(
             r"^(?P<core>.*?)_step(?P<step>[^_]+)_range(?P<range>\d+)_source(?P<source>\d+)_type(?P<dtype>\w+)(?:_(?P<dup>\d+))?_array$",
             var_key,
@@ -90,7 +96,7 @@ class SpectraManager:
             data_type = m.group('dtype') if m.group('dtype') else 'unknown'
 
         if not m:
-            return {'key': var_key, 'core': var_key, 'data_type': 'unknown'}
+            return {'key': var_key, 'core': var_key, 'data_type': 'unknown', 'channel': channel}
 
         core = m.group('core')
         step = m.group('step')
@@ -140,6 +146,7 @@ class SpectraManager:
             'device_no': device_no, 'port': port, 'start_nm': start_nm,
             'end_nm': end_nm, 'step': step, 'range': range_val,
             'source_dbm': source, 'data_type': data_type, 'dup': dup,
+            'channel': channel,
         }
 
     def get_xy(self, key_or_index: int | str, reference=None,

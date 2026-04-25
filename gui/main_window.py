@@ -319,6 +319,7 @@ class MainWindow(QWidget):
             'device',
             'device_no',
             'port',
+            'channel',
             'start_nm',
             'end_nm',
             'step',
@@ -878,6 +879,7 @@ class MainWindow(QWidget):
             'device',
             'device_no',
             'port',
+            'channel',
             'start_nm',
             'end_nm',
             'step',
@@ -934,7 +936,9 @@ class MainWindow(QWidget):
                 dev = meta.get('device', '')
                 dev_no = meta.get('device_no', '') or ''
                 port = meta.get('port', '') or ''
-                label = f'[{idx}] {dev} {dev_no} {port}'.strip()
+                ch = meta.get('channel', '') or ''
+                ch_suffix = f' {ch}' if ch else ''
+                label = f'[{idx}] {dev} {dev_no} {port}{ch_suffix}'.strip()
                 data_list.append({'x': x, 'y': y, 'label': label})
             except Exception as e:
                 print(f'读取索引 {idx} 失败: {e}')
