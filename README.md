@@ -2,6 +2,13 @@
 
 SANTEC 光谱仪数据可视化与分析工具。
 
+本项目提供两个版本：
+
+| 版本 | 入口 | 适用场景 |
+|------|------|---------|
+| **桌面版**（main 分支） | `python main.py` | 本地直接运行，PyQt5 GUI |
+| **Web 版**（web端 分支） | `python web_app.py` | SSH 远程、无需安装额外软件，浏览器访问 |
+
 ## 功能
 
 - CSV 光谱数据加载与可视化
@@ -12,14 +19,47 @@ SANTEC 光谱仪数据可视化与分析工具。
 
 ## 快速开始
 
-### Windows
+### Web 版（推荐用于 SSH 远程）
+
+```bash
+pip install -r requirements.txt
+python web_app.py
+```
+
+启动后在浏览器访问 `http://localhost:8050`。
+
+**SSH 远程使用（VSCode / 任意终端）**：
+1. 在服务器端启动：
+   ```bash
+   python web_app.py --host 0.0.0.0 --port 8050
+   ```
+2. VSCode 会自动弹出端口转发提示，点击"在浏览器中打开"即可。  
+   或手动在本地浏览器访问 `http://localhost:8050`（VSCode 已转发）。
+3. 也可用 SSH 隧道手动转发：
+   ```bash
+   ssh -L 8050:localhost:8050 user@服务器IP
+   ```
+
+**命令行参数**：
+```bash
+python web_app.py --host 127.0.0.1  # 仅本地访问（默认）
+python web_app.py --host 0.0.0.0    # 允许局域网访问
+python web_app.py --port 8888        # 自定义端口
+python web_app.py --debug            # 开启调试模式（代码改动自动重载）
+```
+
+---
+
+### 桌面版快速开始
+
+### Windows（桌面版）
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-### Linux / WSL
+### Linux / WSL（桌面版）
 
 ```bash
 # 一键配置（安装 Qt 依赖 + Python 包 + 中文字体）
@@ -32,7 +72,7 @@ python main.py
 WSL 环境下会自动使用 Windows 原生文件选择器，数据路径自动转换（如 `F:\data` → `/mnt/f/data`）。  
 WSL 的 `DISPLAY` / `XDG_RUNTIME_DIR` 等显示变量由程序自动设置，无需手动配置。
 
-### macOS
+### macOS（桌面版）
 
 ```bash
 pip install -r requirements.txt
@@ -42,33 +82,41 @@ python main.py
 ## 依赖
 
 ```
-numpy
-scipy
-pandas
-matplotlib
+# 通用
+numpy / scipy / pandas / matplotlib
+
+# 桌面版
 PyQt5
+
+# Web 版
+dash / dash-bootstrap-components / plotly
 ```
 
 ## 目录结构
 
 ```
-spectraviewer/
-├── main.py                 # 入口
+SpectrumViewer/
+├── main.py                 # 桌面版入口 (PyQt5)
+├── web_app.py              # Web 版入口 (Dash)
 ├── setup_linux.sh          # Linux/WSL 环境配置脚本
 ├── requirements.txt
-├── core/                   # 数据层 (无 PyQt5 依赖)
+├── core/                   # 数据层
 │   ├── io.py               # CSV 读取
 │   ├── manager.py          # SpectraManager
 │   ├── grid.py             # 网格/插值工具
-│   └── utils.py            # 通用工具
-├── analysis/               # 分析层 (无 PyQt5 依赖)
+│   └── utils.py
+├── analysis/               # 分析层
 │   ├── ring.py             # 微环谐振器分析
 │   ├── peak.py             # 峰值/谷值检测
 │   └── fitting.py          # 洛伦兹拟合
-├── gui/                    # GUI 层 (PyQt5)
-│   ├── main_window.py      # 主窗口
-│   ├── styles.py           # 主题样式
-│   └── widgets.py          # 通用组件
-└── visualization/          # 可视化 (matplotlib)
-    └── plotter.py          # 出版质量绑图
+├── gui/                    # 桌面 GUI (PyQt5)
+│   ├── main_window.py
+│   ├── styles.py
+│   └── widgets.py
+├── web/                    # Web GUI (Dash)
+│   ├── app.py
+│   ├── layout.py
+│   └── callbacks.py
+└── visualization/
+    └── plotter.py
 ```
