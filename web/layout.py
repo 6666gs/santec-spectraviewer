@@ -8,16 +8,28 @@ toolbar = dbc.Navbar(
     dbc.Container([
         dbc.Row([
             dbc.Col(html.Span("SpectraViewer", className="navbar-brand mb-0 h5 fw-bold"), width="auto"),
+            # 上传区
             dbc.Col([
-                dbc.InputGroup([
-                    dbc.InputGroupText("文件夹路径"),
-                    dbc.Input(id="input-folder", placeholder="/path/to/data", debounce=True, style={"minWidth": "320px"}),
-                    dbc.Button("加载", id="btn-load", color="primary", n_clicks=0),
-                ], size="sm"),
+                dcc.Upload(
+                    id="upload-files",
+                    children=dbc.Button("📂 上传 CSV 文件", color="primary", size="sm"),
+                    multiple=True,
+                    accept=".csv",
+                ),
             ], width="auto"),
+            # Reference 上传
+            dbc.Col([
+                dcc.Upload(
+                    id="upload-reference",
+                    children=dbc.Button("📎 Reference（可选）", color="secondary", size="sm", outline=True),
+                    multiple=False,
+                    accept=".csv",
+                ),
+            ], width="auto"),
+            # 数据类型
             dbc.Col([
                 dbc.InputGroup([
-                    dbc.InputGroupText("数据类型"),
+                    dbc.InputGroupText("类型", style={"fontSize": "12px"}),
                     dbc.Select(
                         id="select-datatype",
                         options=[
@@ -26,15 +38,15 @@ toolbar = dbc.Navbar(
                             {"label": "raw",  "value": "raw"},
                         ],
                         value="auto",
+                        style={"fontSize": "12px"},
                     ),
                 ], size="sm"),
             ], width="auto"),
-            dbc.Col([
-                dbc.InputGroup([
-                    dbc.InputGroupText("Reference"),
-                    dbc.Input(id="input-reference", placeholder="（可选）Reference CSV 路径", debounce=True, style={"minWidth": "260px"}),
-                ], size="sm"),
-            ], width="auto"),
+            # 状态提示
+            dbc.Col(
+                html.Span(id="span-upload-status", className="text-light small"),
+                width="auto",
+            ),
         ], align="center", className="g-2 flex-wrap"),
     ], fluid=True),
     color="dark", dark=True, className="py-2 mb-0",
@@ -44,7 +56,7 @@ toolbar = dbc.Navbar(
 left_panel = dbc.Card([
     dbc.CardHeader(html.Span("数据列表", className="fw-semibold")),
     dbc.CardBody([
-        dbc.Alert('请先输入文件夹路径并点击"加载"', id="alert-no-data", color="secondary",
+        dbc.Alert('请先上传 CSV 文件', id="alert-no-data", color="secondary",
                   className="py-2 small", dismissable=False),
         html.Div(id="div-table"),
     ], className="p-2 overflow-auto", style={"height": "calc(100vh - 160px)"}),
@@ -162,10 +174,11 @@ log_bar = dbc.Card(
 
 # ── 隐藏状态存储 ──────────────────────────────────────────────────────────────
 stores = html.Div([
-    dcc.Store(id="store-manager"),       # 序列化的表格数据（无法存 Python 对象，用 JSON 表）
-    dcc.Store(id="store-folder"),        # 当前文件夹路径
-    dcc.Store(id="store-reference"),     # reference 路径
-    dcc.Store(id="store-selected-keys"), # 当前选中的 key 列表
+    dcc.Store(id="store-manager"),        # 序列化的表格数据
+    dcc.Store(id="store-folder"),         # 临时目录路径
+    dcc.Store(id="store-reference"),      # reference 临时文件路径
+    dcc.Store(id="store-selected-keys"),  # 当前选中的 key 列表
+    dcc.Store(id="store-session-id"),     # 会话 ID（用于清理）
 ])
 
 # ── 总布局 ───────────────────────────────────────────────────────────────────
@@ -174,11 +187,8 @@ layout = html.Div([
     toolbar,
     dbc.Container([
         dbc.Row([
-            # 左：数据列表 (3列)
             dbc.Col(left_panel, width=3, className="px-0"),
-            # 中：图表 (6列)
             dbc.Col([chart_area], width=6, className="px-0"),
-            # 右：分析面板 (3列)
             dbc.Col(right_panel, width=3, className="px-0"),
         ], className="g-0"),
         dbc.Row([
