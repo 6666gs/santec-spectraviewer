@@ -8,6 +8,7 @@
 """
 
 import sys
+import os
 import platform
 
 from PyQt5.QtWidgets import QApplication
@@ -16,6 +17,31 @@ from PyQt5.QtGui import QFont
 
 from gui.main_window import MainWindow
 from gui.styles import apply_styles
+
+
+def _setup_wsl_display():
+    """WSL 环境下自动注入 WSLg 显示相关环境变量。"""
+    if not os.path.exists('/proc/version'):
+        return
+    try:
+        with open('/proc/version') as f:
+            if 'microsoft' not in f.read().lower():
+                return
+    except OSError:
+        return
+
+    if not os.environ.get('DISPLAY'):
+        os.environ['DISPLAY'] = ':0'
+    if not os.environ.get('WAYLAND_DISPLAY'):
+        os.environ['WAYLAND_DISPLAY'] = 'wayland-0'
+    # 使用用户自己的 runtime dir 避免 WSLg 目录权限警告
+    if not os.environ.get('XDG_RUNTIME_DIR'):
+        uid = os.getuid()
+        user_runtime = f'/run/user/{uid}'
+        if os.path.isdir(user_runtime):
+            os.environ['XDG_RUNTIME_DIR'] = user_runtime
+        else:
+            os.environ['XDG_RUNTIME_DIR'] = '/mnt/wslg/runtime-dir'
 
 
 def _get_system_font():
@@ -52,6 +78,9 @@ def configure_matplotlib():
 
 
 if __name__ == '__main__':
+    # WSL 下自动配置显示环境变量（需在 Qt 初始化前）
+    _setup_wsl_display()
+
     # 配置 matplotlib（在创建应用前）
     configure_matplotlib()
 

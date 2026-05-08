@@ -29,7 +29,8 @@ bash setup_linux.sh
 python main.py
 ```
 
-WSL 环境下会自动使用 Windows 原生文件选择器，数据路径自动转换（如 `F:\data` → `/mnt/f/data`）。
+WSL 环境下会自动使用 Windows 原生文件选择器，数据路径自动转换（如 `F:\data` → `/mnt/f/data`）。  
+WSL 的 `DISPLAY` / `XDG_RUNTIME_DIR` 等显示变量由程序自动设置，无需手动配置。
 
 ### macOS
 
