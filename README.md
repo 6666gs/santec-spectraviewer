@@ -4,10 +4,14 @@ SANTEC 光谱仪数据可视化与分析工具。
 
 本项目提供两个版本：
 
-| 版本 | 入口 | 适用场景 |
-|------|------|---------|
-| **桌面版**（main 分支） | `python main.py` | 本地直接运行，PyQt5 GUI |
-| **Web 版**（web端 分支） | `python web_app.py` | SSH 远程、无需安装额外软件，浏览器访问 |
+| 版本 | 分支 | 入口 | 适用场景 |
+|------|------|------|---------|
+| **桌面版** | `main` | `python main.py` | 本地直接运行，支持服务器文件夹路径，PyQt5 GUI |
+| **Web 版** | `web端` | `python web_app.py` | SSH 远程访问，数据从**客户端浏览器上传**，无需安装额外软件 |
+
+> **数据加载说明**：
+> - 桌面版：直接填写服务器上的文件夹路径（如 `/data/sweep/`）
+> - Web 版：通过浏览器上传客户端本地 CSV 文件（如 `E:\OneDrive\测试\...`），文件临时保存在服务器，关闭服务后自动删除
 
 ## 功能
 
@@ -17,49 +21,64 @@ SANTEC 光谱仪数据可视化与分析工具。
 - 公式计算（多数据叠加运算）
 - 出版质量图像导出
 
-## 快速开始
+---
 
-### Web 版（推荐用于 SSH 远程）
+## Web 版快速开始（推荐用于 SSH 远程）
+
+### 安装依赖
 
 ```bash
 pip install -r requirements.txt
-python web_app.py
 ```
 
-启动后在浏览器访问 `http://localhost:8050`。
+### 本地启动
 
-**SSH 远程使用（VSCode / 任意终端）**：
+```bash
+python web_app.py
+# 浏览器访问 http://localhost:8050
+```
+
+### SSH 远程使用（VSCode / 任意终端）
+
 1. 在服务器端启动：
    ```bash
    python web_app.py --host 0.0.0.0 --port 8050
    ```
-2. VSCode 会自动弹出端口转发提示，点击"在浏览器中打开"即可。  
-   或手动在本地浏览器访问 `http://localhost:8050`（VSCode 已转发）。
-3. 也可用 SSH 隧道手动转发：
+2. **VSCode**：连接服务器后会自动弹出端口转发提示，点击"在浏览器中打开"即可
+3. **其他终端**：本地执行 SSH 隧道后访问浏览器
    ```bash
    ssh -L 8050:localhost:8050 user@服务器IP
+   # 然后访问 http://localhost:8050
    ```
 
-**命令行参数**：
+### 使用流程
+
+1. 点击顶栏 **"📂 上传 CSV 文件"**，选择本地数据文件夹中的所有 CSV（进入文件夹后 `Ctrl+A` 全选）
+2. （可选）点击 **"📎 Reference"** 上传参考文件
+3. 左侧表格出现数据列表，点击选中行即可绘图
+4. 右侧面板进行峰值、FSR、Q 因子、公式等分析
+
+### 命令行参数
+
 ```bash
 python web_app.py --host 127.0.0.1  # 仅本地访问（默认）
-python web_app.py --host 0.0.0.0    # 允许局域网访问
+python web_app.py --host 0.0.0.0    # 允许局域网/SSH 访问
 python web_app.py --port 8888        # 自定义端口
-python web_app.py --debug            # 开启调试模式（代码改动自动重载）
+python web_app.py --debug            # 调试模式（代码改动自动重载）
 ```
 
 ---
 
-### 桌面版快速开始
+## 桌面版快速开始
 
-### Windows（桌面版）
+### Windows
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-### Linux / WSL（桌面版）
+### Linux / WSL
 
 ```bash
 # 一键配置（安装 Qt 依赖 + Python 包 + 中文字体）
@@ -69,15 +88,16 @@ bash setup_linux.sh
 python main.py
 ```
 
-WSL 环境下会自动使用 Windows 原生文件选择器，数据路径自动转换（如 `F:\data` → `/mnt/f/data`）。  
 WSL 的 `DISPLAY` / `XDG_RUNTIME_DIR` 等显示变量由程序自动设置，无需手动配置。
 
-### macOS（桌面版）
+### macOS
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
+
+---
 
 ## 依赖
 
