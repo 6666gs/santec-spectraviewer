@@ -36,6 +36,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QFrame,
     QScrollArea,
+    QSpinBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -257,6 +258,22 @@ class MainWindow(QWidget):
         """
         )
         layout.addWidget(self.lbl_ref)
+
+        # 字体大小
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.VLine)
+        sep2.setStyleSheet(f'background-color: {C["border"]}; border: none;')
+        sep2.setFixedWidth(1)
+        layout.addWidget(sep2)
+
+        layout.addWidget(QLabel('字体大小:'))
+        self.spin_fontsize = QSpinBox()
+        self.spin_fontsize.setRange(6, 24)
+        self.spin_fontsize.setValue(12)
+        self.spin_fontsize.setSuffix(' pt')
+        self.spin_fontsize.setToolTip('设置图表字体大小')
+        self.spin_fontsize.setFixedWidth(70)
+        layout.addWidget(self.spin_fontsize)
 
         layout.addStretch()
 
@@ -910,6 +927,9 @@ class MainWindow(QWidget):
         self._plot_indices(indices)
 
     # ── 绘图核心 ──────────────────────────────────────────────────────────────
+    def _get_fontsize(self):
+        return self.spin_fontsize.value()
+
     def _get_plot_params(self):
         title = self.title_edit.text().strip() or None
         xlabel = self.xlabel_edit.text().strip() or 'Wavelength (nm)'
@@ -945,7 +965,8 @@ class MainWindow(QWidget):
         if not data_list:
             return
         fig, ax = plot_publication(
-            data_list, xlabel=xlabel, ylabel=ylabel, title=title, xlim=xlim, ylim=ylim
+            data_list, xlabel=xlabel, ylabel=ylabel, title=title, xlim=xlim, ylim=ylim,
+            fontsize=self._get_fontsize(),
         )
         self._style_popup(fig)
         plt.show(block=False)
@@ -976,6 +997,7 @@ class MainWindow(QWidget):
             title=title,
             xlim=xlim,
             ylim=ylim,
+            fontsize=self._get_fontsize(),
         )
         self._style_popup(fig)
         plt.show(block=False)
@@ -1096,6 +1118,7 @@ class MainWindow(QWidget):
             title=title,
             xlim=xlim,
             ylim=ylim,
+            fontsize=self._get_fontsize(),
         )
 
         print(f'\n{"峰值" if is_peak else "谷值"}分析结果（{source_desc}）:')
@@ -1150,14 +1173,16 @@ class MainWindow(QWidget):
         try:
             ring = Ring(x, y)
             print(f'\n微环分析（{source_desc}）...')
+            fs = self._get_fontsize()
             fig_fsr = ring.cal_fsr(
                 range_nm=range_nm, display=True,
                 height_threshold=height_threshold,
                 min_distance=min_distance,
+                fontsize=fs,
             )
             print(f'FSR 均值: {ring.fsr_mean:.4f} nm')
             holdon = self.chk_ring_holdon.isChecked()
-            fig_q = ring.cal_Q(holdon=holdon, max_holdon=10)
+            fig_q = ring.cal_Q(holdon=holdon, max_holdon=10, fontsize=fs)
             self._style_popup(fig_fsr)
             self._style_popup(fig_q)
             plt.show(block=False)

@@ -13,6 +13,10 @@ from .fitting import lorentzian_with_slope, fit_lorentzian_peak
 # matplotlib 中文字体由 main.py 统一配置，这里仅确保 unicode_minus 关闭
 plt.rcParams['axes.unicode_minus'] = False
 
+# Nature 风格无衬线字体栈（图中已全部使用英文）
+# 不含 Helvetica：Windows 无此字体会触发大量 findfont 警告；Arial 优先，DejaVu 兜底
+_FONT = ['Arial', 'DejaVu Sans', 'sans-serif']
+
 # 单位转换常数
 NM_TO_M = 1e-9
 M_TO_NM = 1e9
@@ -53,31 +57,45 @@ def _plt_ready(n: int = 1, cols: int = 2, figsize=(8, 5)):
     return fig, axs
 
 
-# ── 期刊风格颜色常量 ──
+# ── Nature 风格颜色常量 ──
+# 蓝=主数据/Ql，绿=Qi，红=拟合/峰，灰=次要曲线与参考线
 _JC = {
-    'curve':  '#000000',   # 光谱曲线
-    'fit':    '#c0392b',   # 拟合曲线
-    'peak':   '#c0392b',   # 峰标记
-    'arrow':  '#7f8c8d',   # 辅助线
-    'Ql':     '#2c3e50',   # Ql
-    'Qi':     '#27ae60',   # Qi
-    'center': '#2c3e50',   # 中心波长线
-    'bw':     '#7f8c8d',   # 3dB 带宽线
+    'curve':  '#4D4D4D',   # 光谱曲线 — 中性深灰
+    'fit':    '#B64342',   # 拟合曲线 — Nature 红
+    'peak':   '#B64342',   # 峰标记 — Nature 红
+    'arrow':  '#B8B8B8',   # 辅助参考线 — 浅灰
+    'Ql':     '#0F4D92',   # Ql / 负载 Q — Nature 主蓝
+    'Qi':     '#2E9E44',   # Qi / 本征 Q — Nature 绿
+    'center': '#0F4D92',   # 中心波长线 — 蓝
+    'bw':     '#767676',   # 3dB 带宽线 — 中灰
+    'kappa':  '#0F4D92',   # 耦合系数 — 蓝
+    'trans':  '#4D4D4D',   # 透射谱（twin 轴）— 深灰
 }
 
 
-def _apply_journal_style(ax, xlabel='', ylabel='', title=''):
-    """为 Axes 应用期刊视觉风格。"""
-    ax.set_xlabel(xlabel, fontsize=10, fontfamily='serif')
-    ax.set_ylabel(ylabel, fontsize=10, fontfamily='serif')
+def _apply_journal_style(ax, xlabel='', ylabel='', title='', fontsize=10,
+                         open_spines=True):
+    """为 Axes 应用 Nature 风格视觉样式。
+
+    open_spines=True 时移除上/右边框（Nature 标志性的开放坐标轴）。
+    孪生轴（twinx）需保留右边框，应传入 open_spines=False 并自行着色。
+    """
+    ax.set_xlabel(xlabel, fontsize=fontsize, fontfamily=_FONT)
+    ax.set_ylabel(ylabel, fontsize=fontsize, fontfamily=_FONT)
     if title:
-        ax.set_title(title, fontsize=11, fontfamily='serif', fontweight='bold')
-    ax.tick_params(axis='both', which='major', labelsize=8, direction='in',
-                   top=True, right=True)
-    ax.tick_params(axis='both', which='minor', direction='in',
-                   top=True, right=True)
+        ax.set_title(title, fontsize=fontsize + 1, fontfamily=_FONT,
+                     fontweight='bold', pad=8)
+    ax.tick_params(axis='both', which='major', labelsize=max(6, fontsize - 2),
+                   direction='out', length=3.5, width=0.8, top=False, right=False)
+    ax.tick_params(axis='both', which='minor', direction='out',
+                   length=2, width=0.6, top=False, right=False)
+    if open_spines:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
     for spine in ax.spines.values():
         spine.set_linewidth(0.8)
+    for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+        lbl.set_fontfamily(_FONT)
     ax.grid(False)
 
 
@@ -147,7 +165,7 @@ class Ring:
         return {'lam': lam_grid, 'fre': fre_grid, 'T': T_grid}
 
     def cal_fsr(self, range_nm=None, display=True, figinsert=None,
-                height_threshold=None, min_distance=None):
+                height_threshold=None, min_distance=None, fontsize=10):
         """计算自由光谱范围 (FSR)。
 
         Args:
@@ -246,36 +264,42 @@ class Ring:
                 axes = axes.ravel() if isinstance(axes, np.ndarray) else [axes]
 
             ax1, ax2, ax3, ax4 = axes
-            ax1.plot(lambda_peaks[:-1], fsr_lambda_all, 'o-', color=_JC['Ql'],
-                     markersize=4, linewidth=0.8)
+            ax1.plot(lambda_peaks[:-1], fsr_lambda_all, '-', color=_JC['Ql'],
+                     linewidth=1.0, marker='o', markersize=4,
+                     markerfacecolor='white', markeredgecolor=_JC['Ql'],
+                     markeredgewidth=1.0)
             _apply_journal_style(ax1, xlabel='Wavelength (nm)', ylabel='FSR (nm)',
-                                 title='Free Spectral Range vs Wavelength')
+                                 title='Free Spectral Range vs Wavelength', fontsize=fontsize)
 
             if fre_peaks.size > 0:
-                ax2.plot(fre_peaks[:-1], fsr_fre, 'o-', color=_JC['Qi'],
-                         markersize=4, linewidth=0.8)
+                ax2.plot(fre_peaks[:-1], fsr_fre, '-', color=_JC['Qi'],
+                         linewidth=1.0, marker='o', markersize=4,
+                         markerfacecolor='white', markeredgecolor=_JC['Qi'],
+                         markeredgewidth=1.0)
             _apply_journal_style(ax2, xlabel='Frequency (THz)', ylabel='FSR (THz)',
-                                 title='Free Spectral Range vs Frequency')
+                                 title='Free Spectral Range vs Frequency', fontsize=fontsize)
 
-            ax3.plot(lamda, T, color=_JC['curve'], linewidth=0.8, label='Transmission')
+            ax3.plot(lamda, T, color=_JC['curve'], linewidth=0.9, label='Transmission')
             ax3.plot(lambda_peaks, T[peaks], 'o', color=_JC['peak'],
-                     markersize=5, label='Resonance Peaks')
-            ax3.axhline(np.max(T), color=_JC['arrow'], linestyle='--', linewidth=0.5)
-            _apply_journal_style(ax3, xlabel='Wavelength (nm)', ylabel='Transmission (dB)')
-            ax3.legend(fontsize=7, frameon=False)
+                     markersize=4.5, markeredgecolor='white', markeredgewidth=0.5,
+                     label='Resonance Peaks')
+            ax3.axhline(np.max(T), color=_JC['arrow'], linestyle='--', linewidth=0.6)
+            _apply_journal_style(ax3, xlabel='Wavelength (nm)', ylabel='Transmission (dB)', fontsize=fontsize)
+            ax3.legend(fontsize=max(6, fontsize - 2), frameon=False)
 
             if fre is not None:
-                ax4.plot(fre, T, color=_JC['curve'], linewidth=0.8, label='Transmission')
+                ax4.plot(fre, T, color=_JC['curve'], linewidth=0.9, label='Transmission')
                 ax4.plot(fre_peaks, T[peaks], 'o', color=_JC['peak'],
-                         markersize=5, label='Resonance Peaks')
-            ax4.axhline(np.max(T), color=_JC['arrow'], linestyle='--', linewidth=0.5)
-            _apply_journal_style(ax4, xlabel='Frequency (THz)', ylabel='Transmission (dB)')
-            ax4.legend(fontsize=7, frameon=False)
+                         markersize=4.5, markeredgecolor='white', markeredgewidth=0.5,
+                         label='Resonance Peaks')
+            ax4.axhline(np.max(T), color=_JC['arrow'], linestyle='--', linewidth=0.6)
+            _apply_journal_style(ax4, xlabel='Frequency (THz)', ylabel='Transmission (dB)', fontsize=fontsize)
+            ax4.legend(fontsize=max(6, fontsize - 2), frameon=False)
             fig.tight_layout()
             fig.canvas.draw_idle()
             return fig
 
-    def cal_Q(self, holdon=False, max_holdon=10, figinsert=None):
+    def cal_Q(self, holdon=False, max_holdon=10, figinsert=None, fontsize=10):
         """计算 Q 因子。
 
         Args:
@@ -360,7 +384,7 @@ class Ring:
                 result['lambda0'] = float(result['lambda0'])
 
                 # 绘制单峰拟合图
-                fig = self._plot_single_peak_fit(lambda_slice, T_slice_db, result)
+                fig = self._plot_single_peak_fit(lambda_slice, T_slice_db, result, fontsize=fontsize)
                 if fig is not None:
                     figs.append(fig)
 
@@ -386,9 +410,9 @@ class Ring:
             raise ValueError("未获得有效拟合结果，请检查谱线质量或峰值数量。")
 
         self.fit_results = fit_results
-        return self._plot_q_summary(fit_results, peaks, figinsert)
+        return self._plot_q_summary(fit_results, peaks, figinsert, fontsize=fontsize)
 
-    def _plot_single_peak_fit(self, lambda_slice, T_slice_db, result):
+    def _plot_single_peak_fit(self, lambda_slice, T_slice_db, result, fontsize=10):
         """绘制单峰拟合图。"""
         T_slice_linear = 10 ** (T_slice_db / 10)
         T0, ER, lambda0, gamma_half, slope = result['params']
@@ -401,47 +425,48 @@ class Ring:
         baseline_slice = np.maximum(T0 + slope * (lambda_slice - lambda0), 1e-12)
         T_norm = T_slice_linear / baseline_slice
 
-        ax.plot(lambda_slice, T_norm, 'o', markersize=3, alpha=0.6,
-                color=_JC['curve'], label='实验数据')
+        ax.plot(lambda_slice, T_norm, 'o', markersize=3.5, alpha=0.55,
+                color=_JC['curve'], markeredgewidth=0, label='Data')
 
         lambda_dense = np.linspace(lambda_slice[0], lambda_slice[-1], 500)
         T_fit_dense_raw = lorentzian_with_slope(lambda_dense, *result['params'])
         baseline_dense = np.maximum(T0 + slope * (lambda_dense - lambda0), 1e-12)
         T_fit_dense = T_fit_dense_raw / baseline_dense
-        ax.plot(lambda_dense, T_fit_dense, '--', linewidth=0.8,
-                color=_JC['fit'], label='洛伦兹拟合')
+        ax.plot(lambda_dense, T_fit_dense, '-', linewidth=1.6,
+                color=_JC['fit'], label='Lorentz Fit')
 
         ax.axvline(lambda0, color=_JC['center'], linestyle=':',
-                    linewidth=0.8, alpha=0.8, label='中心波长')
+                    linewidth=1.0, alpha=0.85, label='Center')
         ax.axvline(lambda0 - gamma / 2, color=_JC['bw'], linestyle='--',
-                    linewidth=0.6, alpha=0.7)
+                    linewidth=0.7, alpha=0.7)
         ax.axvline(lambda0 + gamma / 2, color=_JC['bw'], linestyle='--',
-                    linewidth=0.6, alpha=0.7, label='3dB带宽')
+                    linewidth=0.7, alpha=0.7, label='3dB BW')
 
         info_text = (
-            f'中心波长: {lambda0:.4f} nm\n'
-            f'3dB带宽: {gamma*1000:.3f} pm\n'
-            f'负载Q (Ql): {Ql:.0f}\n'
-            f'本征Q (Qi): {Qi:.0f}\n'
+            f'Center: {lambda0:.4f} nm\n'
+            f'3dB BW: {gamma*1000:.3f} pm\n'
+            f'Ql: {Ql:.0f}\n'
+            f'Qi: {Qi:.0f}\n'
             f'Qi/Ql: {Qi/Ql:.2f}\n'
-            f'消光比: {ER:.3f}\n'
-            f'R²: {r_squared:.4f}'
+            f'ER: {ER:.3f}\n'
+            f'R2: {r_squared:.4f}'
         )
         ax.text(
-            0.97, 0.95, info_text, transform=ax.transAxes, fontsize=8,
+            0.97, 0.95, info_text, transform=ax.transAxes, fontsize=max(6, fontsize - 2),
             verticalalignment='top', horizontalalignment='right',
-            fontfamily='serif',
-            bbox=dict(boxstyle='round,pad=0.4', facecolor='white',
-                      edgecolor='#cccccc', linewidth=0.5),
+            fontfamily=_FONT, color=_JC['curve'], linespacing=1.4,
+            bbox=dict(boxstyle='round,pad=0.45', facecolor='white',
+                      edgecolor='#D0D0D0', linewidth=0.6, alpha=0.92),
         )
-        _apply_journal_style(ax, xlabel='波长 (nm)', ylabel='归一化透射率',
-                             title=f'峰 @ {lambda0:.3f} nm — 洛伦兹拟合 (R²={r_squared:.4f})')
-        ax.legend(fontsize=8, frameon=False, loc='upper left')
+        _apply_journal_style(ax, xlabel='Wavelength (nm)', ylabel='Normalized Transmission',
+                             title=f'Peak @ {lambda0:.3f} nm  Lorentz Fit (R2={r_squared:.4f})',
+                             fontsize=fontsize)
+        ax.legend(fontsize=max(6, fontsize - 2), frameon=False, loc='upper left')
         ax.set_ylim((0, 1.1))
         fig.tight_layout()
         return fig
 
-    def _plot_q_summary(self, fit_results, peaks, figinsert):
+    def _plot_q_summary(self, fit_results, peaks, figinsert, fontsize=10):
         """绘制 Q 因子汇总图。"""
         def sigma_filter(arr: np.ndarray) -> np.ndarray:
             if arr.size == 0:
@@ -484,28 +509,57 @@ class Ring:
         ax1, ax2, ax3 = axes[:3]
 
         ax1.hist(Ql_filtered, bins=20, color=_JC['Ql'], edgecolor='white',
-                 linewidth=0.5, alpha=0.85)
+                 linewidth=0.5, alpha=0.9)
         _apply_journal_style(ax1, xlabel='$Q_L$', ylabel='Count',
-                             title='Loaded Q-factor Distribution')
+                             title='Loaded Q-factor Distribution', fontsize=fontsize)
 
         ax2.hist(Qi_filtered, bins=20, color=_JC['Qi'], edgecolor='white',
-                 linewidth=0.5, alpha=0.85)
+                 linewidth=0.5, alpha=0.9)
         _apply_journal_style(ax2, xlabel='$Q_i$', ylabel='Count',
-                             title='Intrinsic Q-factor Distribution')
+                             title='Intrinsic Q-factor Distribution', fontsize=fontsize)
 
-        ax3.plot(lambda0_filtered, kappa2_filtered, 'o--', color=_JC['Ql'],
-                 markersize=4, linewidth=0.8, markerfacecolor='none',
-                 label='$\\kappa^2$')
+        # 耦合系数 κ²（左轴，蓝）与透射谱（右轴，灰）共用同一 x 轴。
+        # 两条 y 轴分别着色以与对应曲线匹配，避免黑色叠加看不清。
+        tick_fs = max(6, fontsize - 2)
+
+        # 右轴：透射谱作为背景参考，浅灰细线 + 红色谐振峰标记
+        ax3_1 = ax3.twinx()
+        ax3_1.plot(self.lamda, self.T, color=_JC['trans'], linewidth=0.7,
+                   alpha=0.45, zorder=1)
+        ax3_1.plot(self.lambda0, self.T[peaks], 'o', color=_JC['peak'],
+                   markersize=3.5, markeredgecolor='white', markeredgewidth=0.4,
+                   zorder=2, label='Resonance')
+        ax3_1.set_ylabel('Transmission (dB)', fontsize=fontsize, fontfamily=_FONT,
+                         color=_JC['trans'])
+        ax3_1.tick_params(axis='y', labelsize=tick_fs, direction='out', length=3.5,
+                          width=0.8, colors=_JC['trans'])
+        for lbl in ax3_1.get_yticklabels():
+            lbl.set_fontfamily(_FONT)
+        ax3_1.spines['right'].set_color(_JC['trans'])
+        ax3_1.spines['right'].set_linewidth(0.8)
+        ax3_1.spines['top'].set_visible(False)
+
+        # 左轴：耦合系数 κ²，蓝色实线 + 空心圆标记（主数据，置于前景）
+        ax3.plot(lambda0_filtered, kappa2_filtered, '--', color=_JC['kappa'],
+                 linewidth=1.0, marker='o', markersize=4.5,
+                 markerfacecolor='white', markeredgecolor=_JC['kappa'],
+                 markeredgewidth=1.1, zorder=3, label='$\\kappa^2$')
         _apply_journal_style(ax3, xlabel='Resonance Wavelength (nm)',
                              ylabel='Coupling Coefficient ($\\kappa^2$)',
-                             title='Coupling Coefficient')
-        ax3_1 = ax3.twinx()
-        ax3_1.plot(self.lamda, self.T, color=_JC['curve'], linewidth=0.5, alpha=0.3)
-        ax3_1.plot(self.lambda0, self.T[peaks], 'o', color=_JC['peak'], markersize=4)
-        ax3_1.set_ylabel('Transmission (dB)', fontsize=10, fontfamily='serif')
-        ax3_1.tick_params(axis='y', labelsize=8, direction='in')
-        ax3_1.spines['right'].set_linewidth(0.8)
-        ax3.legend(fontsize=8, frameon=False)
+                             title='Coupling Coefficient', fontsize=fontsize,
+                             open_spines=False)
+        ax3.set_zorder(ax3_1.get_zorder() + 1)   # κ² 在透射谱之上
+        ax3.patch.set_visible(False)             # 让下层透射谱透出
+        ax3.tick_params(axis='y', colors=_JC['kappa'])
+        ax3.yaxis.label.set_color(_JC['kappa'])
+        ax3.spines['left'].set_color(_JC['kappa'])
+        ax3.spines['top'].set_visible(False)
+
+        # 合并两轴图例（蓝 κ² 与红 谐振峰）
+        h1, l1 = ax3.get_legend_handles_labels()
+        h2, l2 = ax3_1.get_legend_handles_labels()
+        ax3.legend(h1 + h2, l1 + l2, fontsize=tick_fs, frameon=False,
+                   loc='upper right')
 
         fig.tight_layout()
         fig.canvas.draw_idle()

@@ -1,24 +1,26 @@
 # visualization/plotter.py — 出版质量绑图
 """出版质量光谱绑图函数。"""
 
-import platform
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 
 
-def _get_serif_font():
-    """根据平台返回衬线字体名称。"""
-    system = platform.system()
-    if system == 'Darwin':
-        return 'Times New Roman'
-    elif system == 'Windows':
-        return 'Times New Roman'
-    else:
-        return 'serif'
+# Nature 风格无衬线字体栈
+# 不含 Helvetica：Windows 无此字体会触发大量 findfont 警告；Arial 优先，DejaVu 兜底
+_SANS = ['Arial', 'DejaVu Sans', 'sans-serif']
 
-
-_SERIF = _get_serif_font()
+# Nature 风格默认配色（蓝/红/绿/青/紫… 低饱和、彼此区分度高）
+_NATURE_COLORS = [
+    '#0F4D92',   # blue_main
+    '#B64342',   # red_strong
+    '#2E9E44',   # green
+    '#42949E',   # teal
+    '#9A4D8E',   # violet
+    '#E28E2C',   # orange
+    '#767676',   # neutral_mid
+    '#3775BA',   # blue_secondary
+]
 
 
 def plot_publication(
@@ -33,6 +35,7 @@ def plot_publication(
     save_path=None,
     dpi=300,
     title=None,
+    fontsize=16,
 ):
     """生成出版质量的图像。
 
@@ -52,30 +55,27 @@ def plot_publication(
     Returns:
         (fig, ax) matplotlib 对象
     """
-    default_colors = [
-        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-        '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
-    ]
     fig, ax = plt.subplots(figsize=figsize)
     has_label = False
     for i, data in enumerate(data_list):
         x = data['x']
         y = data['y']
         label = data.get('label', None)
-        color = data.get('color', default_colors[i % len(default_colors)])
+        color = data.get('color', _NATURE_COLORS[i % len(_NATURE_COLORS)])
         marker = data.get('marker', False)
-        marker_size = data.get('marker_size', 50)
-        linewidth = data.get('linewidth', 2)
+        marker_size = data.get('marker_size', 36)
+        linewidth = data.get('linewidth', 1.8)
         linestyle = data.get('linestyle', '-')
         if label:
             has_label = True
-        ax.plot(x, y, linestyle, color=color, linewidth=linewidth, label=label, zorder=1)
+        ax.plot(x, y, linestyle, color=color, linewidth=linewidth, label=label, zorder=2)
         if marker:
-            ax.scatter(x, y, s=marker_size, color=color, zorder=2)
-    ax.set_xlabel(xlabel, fontsize=16, fontweight='bold', family=_SERIF)
-    ax.set_ylabel(ylabel, fontsize=16, fontweight='bold', family=_SERIF)
+            ax.scatter(x, y, s=marker_size, color=color, edgecolors='white',
+                       linewidth=0.5, zorder=3)
+    ax.set_xlabel(xlabel, fontsize=fontsize, family=_SANS)
+    ax.set_ylabel(ylabel, fontsize=fontsize, family=_SANS)
     if title:
-        ax.set_title(title, fontsize=18, fontweight='bold', family=_SERIF)
+        ax.set_title(title, fontsize=fontsize + 2, fontweight='bold', family=_SANS, pad=10)
     if xlim:
         ax.set_xlim(xlim)
     if ylim:
@@ -85,18 +85,19 @@ def plot_publication(
         ax.xaxis.set_major_locator(MultipleLocator(x_major))
     if y_major:
         ax.yaxis.set_major_locator(MultipleLocator(y_major))
-    ax.tick_params(axis='both', which='major', labelsize=12, width=2, length=6,
-                   direction='in', top=True, right=True, bottom=True, left=True, zorder=10)
+    # Nature 标志性的开放坐标轴：移除上/右边框
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.tick_params(axis='both', which='major', labelsize=max(8, fontsize - 4),
+                   width=1.0, length=4, direction='out', top=False, right=False)
     ax.minorticks_off()
     for tick_label in ax.get_xticklabels() + ax.get_yticklabels():
-        tick_label.set_fontweight('bold')
-        tick_label.set_fontname(_SERIF)
+        tick_label.set_fontname(_SANS[0])
     for spine in ax.spines.values():
-        spine.set_linewidth(2)
-        spine.set_zorder(10)
+        spine.set_linewidth(1.2)
     if has_label:
-        ax.legend(fontsize=12, frameon=False,
-                  prop={'family': _SERIF, 'weight': 'bold'})
+        ax.legend(fontsize=max(8, fontsize - 4), frameon=False,
+                  prop={'family': _SANS, 'size': max(8, fontsize - 4)})
     plt.tight_layout()
     if save_path:
         fig.savefig(save_path, dpi=dpi, bbox_inches='tight')
