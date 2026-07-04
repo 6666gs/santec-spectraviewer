@@ -8,26 +8,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 安装依赖
 pip install -r requirements.txt
 
-# 运行应用
+# 运行应用（GUI）
 python main.py
+
+# 批量微环 Q 分析（CLI，多 FSR 自动分离，直通端）
+python batch_ring_q.py <数据目录> --out <输出目录> [--type auto|loss|raw] [--reference REF] [--min-r2 0.9]
+
+# 运行测试（需 pytest）
+pytest -q
 ```
 
-本项目无 linter、测试框架或打包配置，为纯 Python 桌面应用。
+本项目为纯 Python 桌面应用；GUI 无 linter/打包配置。`analysis/`、`core/`、`visualization/`
+的纯逻辑部分带 pytest 单测（见 `tests/`）。
 
 ## 目录结构
 
 ```
 spectraviewer/
 ├── main.py                     # 入口 (高 DPI + matplotlib 配置)
+├── batch_ring_q.py             # 批量微环 Q 分析 CLI (多 FSR 自动分离，直通端)
 │
 ├── core/                       # 数据层 (无 PyQt5 依赖)
-│   ├── io.py                   # CSV 读取
+│   ├── io.py                   # CSV 读取；detect_header_rows/load_spectrum 自动表头
 │   ├── manager.py              # SpectraManager
 │   ├── grid.py                 # 网格/插值工具
 │   └── utils.py                # 通用工具
 │
 ├── analysis/                   # 分析层 (无 PyQt5 依赖)
-│   ├── ring.py                 # 微环谐振器 FSR/Q 分析
+│   ├── ring.py                 # 微环谐振器 FSR/Q 分析 (GUI 用，单模)
+│   ├── multimode.py            # 多 FSR 分离 + 分模式逐峰 Q 拟合 (批量 CLI 用)
 │   ├── peak.py                 # 峰值/谷值检测
 │   └── fitting.py              # 洛伦兹拟合
 │
@@ -36,9 +45,20 @@ spectraviewer/
 │   ├── styles.py               # 暗色主题样式定义
 │   └── widgets.py              # 通用组件
 │
-└── visualization/              # 可视化 (仅 matplotlib)
-    └── plotter.py              # 出版质量绑图
+├── visualization/              # 可视化 (仅 matplotlib)
+│   ├── plotter.py              # 出版质量绑图
+│   └── ring_report.py          # 单文件多模式 Q 报告图 (批量 CLI 用)
+│
+└── tests/                      # pytest 单测 (core/analysis/visualization/CLI)
 ```
+
+### 批量微环 Q 分析（`batch_ring_q.py`）
+
+单文件=单微环，逐个处理，按输入文件名输出 `<stem>_Qdist.png` 与 `<stem>_results.csv`。
+核心为 `analysis/multimode.py` 的频域贪心梳状分离：候选 FSR 用间距贪心聚类播种，
+链延伸收紧容差以避免跨族误吸收，EMA 跟踪本地 FSR 容忍色散；自动确定模式数 K（K=1
+退化为单模）。拟合窗口按**全局**最近谷中点取，隔离相邻他族谷。设计/计划见
+`docs/superpowers/specs/2026-07-04-batch-ring-q-analysis-design.md`。
 
 ## 模块职责
 

@@ -3,3 +3,6 @@ scipy
 pandas
 matplotlib
 PyQt5
+
+# 开发/测试（可选）
+# pytest

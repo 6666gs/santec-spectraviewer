@@ -313,3 +313,75 @@ def read_csv_arrays(
 
     print(f"\n总计导入 {loaded_count} 个文件")
     return data_dict
+
+
+def _io_tokens(line: str) -> list:
+    return [p.strip() for p in re.split(r'[,\t;]', line.rstrip('\n')) if p.strip() != '']
+
+
+def _io_is_numeric_row(line: str, min_cols: int = 2) -> bool:
+    toks = _io_tokens(line)
+    if len(toks) < min_cols:
+        return False
+    for t in toks:
+        try:
+            float(t)
+        except ValueError:
+            return False
+    return True
+
+
+def detect_header_rows(path, max_scan: int = 300) -> int:
+    """自动探测数据前的头行数（skiprows）。
+
+    兼容 SANTEC 多行头 + 列头，与无头简单两列文件。返回值语义与
+    read_santec_csv 的 skiprows 一致：列头行索引（若存在），否则首个数据行索引。
+    """
+    with open(path, encoding='utf-8', errors='replace') as f:
+        lines = [f.readline() for _ in range(max_scan)]
+    first_data = None
+    for i in range(len(lines) - 1):
+        if not lines[i]:
+            break
+        if _io_is_numeric_row(lines[i]) and _io_is_numeric_row(lines[i + 1]):
+            first_data = i
+            break
+    if first_data is None:
+        for i, ln in enumerate(lines):
+            if ln and _io_is_numeric_row(ln):
+                first_data = i
+                break
+    if first_data is None:
+        return 0
+    if first_data >= 1:
+        prev = lines[first_data - 1]
+        if len(_io_tokens(prev)) >= 2 and not _io_is_numeric_row(prev):
+            return first_data - 1
+    return first_data
+
+
+def load_spectrum(path, data_type: str = 'auto', reference_path: str | None = None,
+                  channel: str | None = None):
+    """加载单个直通端谱，返回 (lam_nm, loss_db, meta)。
+
+    自动探测表头行数后复用 read_santec_csv 的 loss/raw/多量程/reference 逻辑。
+    多通道文件默认取第一通道；channel 指定时匹配对应通道。
+    """
+    skip = detect_header_rows(path)
+    results = read_santec_csv(path, data_type=data_type,
+                              reference_path=reference_path, skiprows=skip)
+    if not results:
+        raise ValueError(f"无法读取数据: {path}")
+    chosen = results[0]
+    if channel:
+        for r in results:
+            if str(r.get('channel', '')).upper() == str(channel).upper():
+                chosen = r
+                break
+    lam = np.asarray(chosen['wavelength'], dtype=float)
+    loss = np.asarray(chosen['loss'], dtype=float)
+    meta = {
+        'data_type': chosen['data_type'], 'channel': chosen.get('channel', ''),
+        'ranges': chosen.get('ranges', []), 'skiprows': skip,
+    }
+    return lam, loss, meta
