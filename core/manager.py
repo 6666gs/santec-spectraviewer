@@ -83,12 +83,12 @@ class SpectraManager:
             channel = ch_match.group(1)
             var_key = var_key.replace(f'_ch{channel}', '')
         m = re.match(
-            r"^(?P<core>.*?)_step(?P<step>[^_]+)_range(?P<range>\d+)_source(?P<source>\d+)_type(?P<dtype>\w+)(?:_(?P<dup>\d+))?_array$",
+            r"^(?P<core>.*?)_step(?P<step>[^_]+)_range(?P<range>\d+)_source(?P<source>-?\d+(?:\.\d+)?)_type(?P<dtype>\w+)(?:_(?P<dup>\d+))?_array$",
             var_key,
         )
         if not m:
             m = re.match(
-                r"^(?P<core>.*?)_step(?P<step>[^_]+)_range(?P<range>\d+)_source(?P<source>\d+)(?:_(?P<dup>\d+))?_array$",
+                r"^(?P<core>.*?)_step(?P<step>[^_]+)_range(?P<range>\d+)_source(?P<source>-?\d+(?:\.\d+)?)(?:_(?P<dup>\d+))?_array$",
                 var_key,
             )
             data_type = 'unknown'
