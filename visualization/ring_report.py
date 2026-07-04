@@ -4,6 +4,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from analysis.multimode import stats_fits, DEFAULT_MAX_QI_QL
+
+# 兼容中文注记：优先各平台常见 CJK 字体，回退 DejaVu
+plt.rcParams['font.sans-serif'] = [
+    'Microsoft YaHei', 'SimHei', 'PingFang SC', 'Heiti SC', 'STHeiti',
+    'Arial Unicode MS', 'WenQuanYi Zen Hei', 'DejaVu Sans',
+]
 plt.rcParams['axes.unicode_minus'] = False
 
 # 各模式定性配色
@@ -30,10 +37,10 @@ def _sigma_filter(values, k=4.0):
     return a if s == 0 else a[np.abs(a - m) < k * s]
 
 
-def _dist_axis(ax, result, attr, xlabel):
+def _dist_axis(ax, families, fits, attr, xlabel):
     drew = False
-    for fam, color in zip(result.families, _MODE_COLORS):
-        vals = _sigma_filter(getattr(f, attr) for f in result.fits if f.mode == fam.label)
+    for fam, color in zip(families, _MODE_COLORS):
+        vals = _sigma_filter(getattr(f, attr) for f in fits if f.mode == fam.label)
         if vals.size == 0:
             continue
         drew = True
@@ -49,8 +56,12 @@ def _dist_axis(ax, result, attr, xlabel):
         ax.legend(fontsize=7, frameon=False)
 
 
-def plot_multimode_report(result, *, min_r2=0.9):
-    """单文件多模式 Q 综合报告图。返回 matplotlib Figure。"""
+def plot_multimode_report(result, *, min_r2=0.9, max_qi_ql=DEFAULT_MAX_QI_QL):
+    """单文件多模式 Q 综合报告图。返回 matplotlib Figure。
+
+    统计（分布图与小结表）仅计入 Qi/Ql <= max_qi_ql 的峰；CSV 仍含全部数据。
+    """
+    sfits = stats_fits(result.fits, max_qi_ql)  # 统计用子集（剔除高 Qi/Ql）
     fig = plt.figure(figsize=(12, 8))
     gs = fig.add_gridspec(2, 3)
     ax_spec = fig.add_subplot(gs[0, :])
@@ -77,16 +88,16 @@ def plot_multimode_report(result, *, min_r2=0.9):
     if result.families or result.unassigned_idx.size:
         ax_spec.legend(fontsize=7, frameon=False, ncol=2)
 
-    # ── Ql / Qi 分布 ──
-    _dist_axis(ax_ql, result, 'ql', r'$Q_L$')
-    _dist_axis(ax_qi, result, 'qi', r'$Q_i$')
+    # ── Ql / Qi 分布（仅统计 Qi/Ql <= 阈值 的峰）──
+    _dist_axis(ax_ql, result.families, sfits, 'ql', r'$Q_L$')
+    _dist_axis(ax_qi, result.families, sfits, 'qi', r'$Q_i$')
 
     # ── 小结表 ──
     header = ['Mode', 'FSR(nm)', 'N', 'Ql(med)', 'Qi(med)']
     body = []
     for fam in result.families:
-        ql = _sigma_filter(f.ql for f in result.fits if f.mode == fam.label)
-        qi = _sigma_filter(f.qi for f in result.fits if f.mode == fam.label)
+        ql = _sigma_filter(f.ql for f in sfits if f.mode == fam.label)
+        qi = _sigma_filter(f.qi for f in sfits if f.mode == fam.label)
         body.append([
             fam.label, f'{fam.fsr_nm:.2f}', str(int(ql.size)),
             f'{np.median(ql):.2e}' if ql.size else '—',
@@ -99,5 +110,11 @@ def plot_multimode_report(result, *, min_r2=0.9):
     tbl.set_fontsize(8)
     tbl.scale(1, 1.4)
 
-    fig.tight_layout()
+    # ── 统计口径注记（CSV 仍含全部数据）──
+    n_excluded = len(result.fits) - len(sfits)
+    fig.text(0.5, 0.008,
+             f'统计仅计入 Qi/Ql ≤ {max_qi_ql:g} 的峰；Qi/Ql > {max_qi_ql:g} 不纳入统计'
+             f'（本次剔除 {n_excluded} 个）。CSV 输出仍含全部数据。',
+             ha='center', va='bottom', fontsize=9, color='#c0392b')
+    fig.tight_layout(rect=(0, 0.03, 1, 1))
     return fig

@@ -755,6 +755,11 @@ class MainWindow(QWidget):
         self.ring_distance.setPlaceholderText('0 表示自动')
         form.addRow('最小间距:', self.ring_distance)
 
+        # Qi/Ql 统计上限
+        self.ring_qiql_max = QLineEdit('20')
+        self.ring_qiql_max.setPlaceholderText('默认 20，高于此值不纳入统计')
+        form.addRow('Qi/Ql 上限:', self.ring_qiql_max)
+
         vbox.addLayout(form)
 
         self.chk_ring_holdon = QCheckBox('显示单峰拟合（最多10个）')
@@ -1169,6 +1174,9 @@ class MainWindow(QWidget):
         height_threshold = _parse_float_edit(self.ring_threshold)
         min_distance_val = _parse_float_edit(self.ring_distance)
         min_distance = int(min_distance_val) if min_distance_val else None
+        qiql_max = _parse_float_edit(self.ring_qiql_max)
+        if not qiql_max or qiql_max <= 0:
+            qiql_max = 20.0
 
         try:
             ring = Ring(x, y)
@@ -1182,7 +1190,8 @@ class MainWindow(QWidget):
             )
             print(f'FSR 均值: {ring.fsr_mean:.4f} nm')
             holdon = self.chk_ring_holdon.isChecked()
-            fig_q = ring.cal_Q(holdon=holdon, max_holdon=10, fontsize=fs)
+            fig_q = ring.cal_Q(holdon=holdon, max_holdon=10, fontsize=fs,
+                               max_qi_ql=qiql_max)
             self._style_popup(fig_fsr)
             self._style_popup(fig_q)
             plt.show(block=False)

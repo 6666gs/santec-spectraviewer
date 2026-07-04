@@ -23,10 +23,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from core.io import load_spectrum
-from analysis.multimode import analyze_multimode
+from analysis.multimode import analyze_multimode, stats_fits, qi_ql_ratio, DEFAULT_MAX_QI_QL
 from visualization.ring_report import plot_multimode_report
 
-CSV_FIELDS = ['mode_id', 'fsr_nm', 'lambda0_nm', 'ql', 'qi', 'er_db', 'gamma_pm', 'r_squared']
+CSV_FIELDS = ['mode_id', 'fsr_nm', 'lambda0_nm', 'ql', 'qi', 'qi_ql',
+              'er_db', 'gamma_pm', 'r_squared']
 
 
 def _er_db(er: float) -> float:
@@ -42,21 +43,26 @@ def _write_csv(path, result):
             w.writerow({
                 'mode_id': fit.mode, 'fsr_nm': f'{fit.fsr_nm:.4f}',
                 'lambda0_nm': f'{fit.lambda0_nm:.5f}', 'ql': f'{fit.ql:.6g}',
-                'qi': f'{fit.qi:.6g}', 'er_db': f'{_er_db(fit.er):.3f}',
+                'qi': f'{fit.qi:.6g}', 'qi_ql': f'{qi_ql_ratio(fit):.3f}',
+                'er_db': f'{_er_db(fit.er):.3f}',
                 'gamma_pm': f'{fit.gamma_pm:.4f}', 'r_squared': f'{fit.r_squared:.5f}',
             })
 
 
-def _log_result(name, meta, result):
+def _log_result(name, meta, result, max_qi_ql=DEFAULT_MAX_QI_QL):
     n_dips = sum(len(f.peak_indices) for f in result.families) + result.unassigned_idx.size
+    sfits = stats_fits(result.fits, max_qi_ql)  # 统计口径与出图一致
     print(f"[{name}] type={meta.get('data_type')}, ch={meta.get('channel') or '-'}, 谷={n_dips}")
-    print(f"  识别到 {len(result.families)} 个模式:")
+    print(f"  识别到 {len(result.families)} 个模式（统计仅计入 Qi/Ql ≤ {max_qi_ql:g}）:")
     for fam in result.families:
-        fits = [f for f in result.fits if f.mode == fam.label]
+        fits = [f for f in sfits if f.mode == fam.label]
         ql = np.median([f.ql for f in fits]) if fits else float('nan')
         qi = np.median([f.qi for f in fits]) if fits else float('nan')
         print(f"    {fam.label}: FSR={fam.fsr_nm:.2f} nm, N={len(fam.peak_indices)}, "
-              f"有效拟合={len(fits)}, Ql(中位)={ql:.3g}, Qi(中位)={qi:.3g}")
+              f"统计峰数={len(fits)}, Ql(中位)={ql:.3g}, Qi(中位)={qi:.3g}")
+    n_excluded = len(result.fits) - len(sfits)
+    if n_excluded:
+        print(f"  Qi/Ql > {max_qi_ql:g} 剔除出统计: {n_excluded} 个（CSV 仍保留）")
     if result.unassigned_idx.size:
         print(f"  unassigned: {result.unassigned_idx.size}")
 
@@ -70,6 +76,8 @@ def main(argv=None):
     ap.add_argument('--pattern', default='*.csv', help='文件名匹配（默认 *.csv）')
     ap.add_argument('--channel', default=None, help='指定通道（默认第一通道）')
     ap.add_argument('--min-r2', type=float, default=0.9, help='拟合 R² 阈值（默认 0.9）')
+    ap.add_argument('--max-qi-ql', type=float, default=DEFAULT_MAX_QI_QL,
+                    help='统计 Qi/Ql 上限；高于此值的峰不纳入统计（默认 20，CSV 仍含全部）')
     ap.add_argument('--max-modes', type=int, default=None, help='模式数上限（默认不限）')
     ap.add_argument('--prominence', type=float, default=None, help='寻峰最小突出度（默认自动）')
     ap.add_argument('--distance', type=int, default=None, help='寻峰最小间距，点数（默认自动）')
@@ -99,11 +107,11 @@ def main(argv=None):
             result = analyze_multimode(
                 lam, loss_db, source_name=stem, min_r2=args.min_r2,
                 max_modes=args.max_modes, **detect_kw)
-            fig = plot_multimode_report(result, min_r2=args.min_r2)
+            fig = plot_multimode_report(result, min_r2=args.min_r2, max_qi_ql=args.max_qi_ql)
             fig.savefig(os.path.join(out, f'{stem}_Qdist.png'), dpi=300, bbox_inches='tight')
             plt.close(fig)
             _write_csv(os.path.join(out, f'{stem}_results.csv'), result)
-            _log_result(stem, meta, result)
+            _log_result(stem, meta, result, max_qi_ql=args.max_qi_ql)
             ok += 1
         except Exception as e:
             print(f"错误: {stem}: {e}")

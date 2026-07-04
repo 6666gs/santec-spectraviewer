@@ -22,6 +22,17 @@ def test_report_returns_figure(tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_report_has_exclusion_annotation():
+    from analysis.multimode import analyze_multimode
+    from visualization.ring_report import plot_multimode_report
+    lam = np.arange(1500, 1600, 0.002)
+    t_db = _synth(lam, np.arange(1504, 1596, 9.0), 0.03, 0.7)
+    res = analyze_multimode(lam, t_db, source_name='syn', min_r2=0.8)
+    fig = plot_multimode_report(res, max_qi_ql=20)
+    texts = [t.get_text() for t in fig.texts]
+    assert any('不纳入统计' in s and '20' in s for s in texts)
+
+
 def test_report_two_modes(tmp_path):
     from analysis.multimode import analyze_multimode
     from visualization.ring_report import plot_multimode_report

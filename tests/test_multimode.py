@@ -63,6 +63,23 @@ def test_analyze_recovers_two_modes_q():
     assert labels[0] == 'Mode 1'  # FSR 升序编号
 
 
+def test_stats_fits_filters_high_qi_ql():
+    from analysis.multimode import (ResonanceFit, stats_fits, qi_ql_ratio,
+                                    DEFAULT_MAX_QI_QL)
+
+    def mk(ql, qi):
+        return ResonanceFit(mode='Mode 1', lambda0_nm=1550.0, ql=ql, qi=qi,
+                            er=0.5, gamma_pm=50.0, r_squared=0.99, fsr_nm=9.0)
+
+    fits = [mk(1e4, 1.5e4), mk(1e4, 5e4), mk(1e4, 25e4), mk(1e4, 21e4)]
+    assert DEFAULT_MAX_QI_QL == 20.0
+    assert abs(qi_ql_ratio(fits[0]) - 1.5) < 1e-9
+    kept = stats_fits(fits, 20.0)
+    assert len(kept) == 2  # ratio 25 与 21 被剔除
+    assert all(qi_ql_ratio(f) <= 20.0 for f in kept)
+    assert len(stats_fits(fits)) == 2  # 默认阈值 20
+
+
 def test_analyze_single_mode_smoke():
     from analysis.multimode import analyze_multimode
     lam = np.arange(1500, 1600, 0.002)

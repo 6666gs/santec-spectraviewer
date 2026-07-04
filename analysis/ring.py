@@ -299,7 +299,8 @@ class Ring:
             fig.canvas.draw_idle()
             return fig
 
-    def cal_Q(self, holdon=False, max_holdon=10, figinsert=None, fontsize=10):
+    def cal_Q(self, holdon=False, max_holdon=10, figinsert=None, fontsize=10,
+              max_qi_ql=20.0):
         """计算 Q 因子。
 
         Args:
@@ -410,7 +411,8 @@ class Ring:
             raise ValueError("未获得有效拟合结果，请检查谱线质量或峰值数量。")
 
         self.fit_results = fit_results
-        return self._plot_q_summary(fit_results, peaks, figinsert, fontsize=fontsize)
+        return self._plot_q_summary(fit_results, peaks, figinsert, fontsize=fontsize,
+                                    max_qi_ql=max_qi_ql)
 
     def _plot_single_peak_fit(self, lambda_slice, T_slice_db, result, fontsize=10):
         """绘制单峰拟合图。"""
@@ -466,8 +468,11 @@ class Ring:
         fig.tight_layout()
         return fig
 
-    def _plot_q_summary(self, fit_results, peaks, figinsert, fontsize=10):
-        """绘制 Q 因子汇总图。"""
+    def _plot_q_summary(self, fit_results, peaks, figinsert, fontsize=10, max_qi_ql=20.0):
+        """绘制 Q 因子汇总图。
+
+        统计（直方图/κ²）仅计入 Qi/Ql <= max_qi_ql 的峰；高于此值不纳入统计。
+        """
         def sigma_filter(arr: np.ndarray) -> np.ndarray:
             if arr.size == 0:
                 return arr
@@ -479,18 +484,27 @@ class Ring:
                 return arr
             return arr[np.abs(arr - m) < 4 * s]
 
+        # 统计口径：剔除 Qi/Ql 高于阈值的峰
+        stats_results = [
+            r for r in fit_results
+            if np.isfinite(r['Ql']) and r['Ql'] > 0
+            and np.isfinite(r['Qi']) and r['Qi'] > 0
+            and (r['Qi'] / r['Ql']) <= max_qi_ql
+        ]
+        n_excluded = len(fit_results) - len(stats_results)
+
         Ql_filtered = sigma_filter(
-            np.array([r['Ql'] for r in fit_results if np.isfinite(r['Ql']) and r['Ql'] > 0])
+            np.array([r['Ql'] for r in stats_results])
         )
         Qi_filtered = sigma_filter(
-            np.array([r['Qi'] for r in fit_results if np.isfinite(r['Qi']) and r['Qi'] > 0])
+            np.array([r['Qi'] for r in stats_results])
         )
 
         kappa2_all = np.array(
-            [r['kappa2'] for r in fit_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
+            [r['kappa2'] for r in stats_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
         )
         lambda0_all = np.array(
-            [r['lambda0'] for r in fit_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
+            [r['lambda0'] for r in stats_results if np.isfinite(r['kappa2']) and 0 < r['kappa2'] < 1]
         )
         kappa2_filtered = sigma_filter(kappa2_all)
         if kappa2_filtered.size > 0:
@@ -561,7 +575,12 @@ class Ring:
         ax3.legend(h1 + h2, l1 + l2, fontsize=tick_fs, frameon=False,
                    loc='upper right')
 
-        fig.tight_layout()
+        # 统计口径注记：Qi/Ql 高于阈值的峰不纳入统计
+        fig.text(0.5, 0.01,
+                 f'统计仅计入 Qi/Ql ≤ {max_qi_ql:g} 的峰；'
+                 f'Qi/Ql > {max_qi_ql:g} 不纳入统计（剔除 {n_excluded} 个）',
+                 ha='center', va='bottom', fontsize=max(7, fontsize - 2), color='#c0392b')
+        fig.tight_layout(rect=(0, 0.035, 1, 1))
         fig.canvas.draw_idle()
         return fig
 
